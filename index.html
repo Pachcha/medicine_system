@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการยานักเรียนประจำ</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .nav-tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .nav-tab {
+            flex: 1;
+            padding: 15px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .nav-tab.active {
+            background: white;
+            color: #007bff;
+            border-bottom: 3px solid #007bff;
+        }
+
+        .nav-tab:hover {
+            background: #e9ecef;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .section-title {
+            font-size: 1.8em;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+        }
+
+        .search-box {
+            margin-bottom: 20px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .medicine-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .medicine-card:hover {
+            border-color: #007bff;
+            box-shadow: 0 4px 15px rgba(0,123,255,0.1);
+        }
+
+        .medicine-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .medicine-name {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .medicine-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .medicine-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f8f9fa;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #6c757d;
+        }
+
+        .info-value {
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-sufficient {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-low {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-critical {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .section-header {
+                flex-direction: column;
+                gap: 15px;
+                align-items: stretch;
+            }
+            
+            .medicine-info {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 ระบบจัดการยานักเรียนประจำ</h1>
+            <p>จัดการข้อมูลนักเรียนและยาส่วนตัวแยกรายบุคคล</p>
+        </div>
+
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="showTab('students')">👨‍🎓 จัดการนักเรียน</button>
+            <button class="nav-tab" onclick="showTab('medicines')">💊 จัดการยานักเรียน</button>
+        </div>
+
+        <div class="content">
+            <!-- Tab นักเรียน -->
+            <div id="students-tab" class="tab-content active">
+                <div class="section-header">
+                    <h2 class="section-title">📋 รายชื่อนักเรียน</h2>
+                    <button class="btn btn-primary" onclick="openStudentModal()">
+                        ➕ เพิ่มนักเรียนใหม่
+                    </button>
+                </div>
+
+                <div class="search-box">
+                    <input type="text" class="search-input" id="studentSearch" 
+                           placeholder="🔍 ค้นหานักเรียน (ชื่อ, รหัส, ห้อง)..." 
+                           onkeyup="searchStudents()">
+                </div>
+
+                <div class="table-container">
+                    <table id="studentsTable">
+                        <thead>
+                            <tr>
+                                <th>รหัสนักเรียน</th>
+                                <th>ชื่อ-นามสกุล</th>
+                                <th>ห้อง</th>
+                                <th>อายุ</th>
+                                <th>ประวัติแพ้ยา</th>
+                                <th>จำนวนยา</th>
+                                <th>การจัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab ยา -->
+            <div id="medicines-tab" class="tab-content">
+                <div class="section-header">
+                    <h2 class="section-title">💊 จัดการยานักเรียน</h2>
+                    <div>
+                        <select id="studentSelect" class="form-control" style="width: 250px; display: inline-block; margin-right: 15px;" onchange="loadStudentMedicines()">
+                            <option value="">-- เลือกนักเรียน --</option>
+                        </select>
+                        <button class="btn btn-success" onclick="openMedicineModal()" id="addMedicineBtn" disabled>
+                            ➕ เพิ่มยา
+                        </button>
+                    </div>
+                </div>
+
+                <div id="medicinesContainer">
+                    <div class="empty-state">
+                        <h3>🔍 เลือกนักเรียนเพื่อจัดการยา</h3>
+                        <p>กรุณาเลือกนักเรียนจากรายการด้านบนเพื่อดูและจัดการยาส่วนตัว</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal นักเรียน -->
+    <div id="studentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="studentModalTitle">➕ เพิ่มนักเรียนใหม่</h2>
+                <span class="close" onclick="closeStudentModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="studentForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">รหัสนักเรียน *</label>
+                            <input type="text" id="studentId" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">ห้อง *</label>
+                            <input type="text" id="studentRoom" class="form-control" required placeholder="เช่น ม.1/1">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">ชื่อ *</label>
+                            <input type="text" id="studentFirstName" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">นามสกุล *</label>
+                            <input type="text" id="studentLastName" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">อายุ *</label>
+                            <input type="number" id="studentAge" class="form-control" required min="10" max="25">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">เบอร์ติดต่อผู้ปกครอง</label>
+                            <input type="tel" id="parentPhone" class="form-control" placeholder="08X-XXX-XXXX">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">ประวัติแพ้ยา</label>
+                        <textarea id="allergies" class="form-control" rows="3" 
+                                  placeholder="บันทึกประวัติการแพ้ยาหรือข้อควรระวัง..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">หมายเหตุเพิ่มเติม</label>
+                        <textarea id="studentNotes" class="form-control" rows="2" 
+                                  placeholder="ข้อมูลเพิ่มเติมเกี่ยวกับนักเรียน..."></textarea>
+                    </div>
+
+                    <div style="text-align: right; margin-top: 30px;">
+                        <button type="button" class="btn" onclick="closeStudentModal()" 
+                                style="background: #6c757d; color: white; margin-right: 10px;">ยกเลิก</button>
+                        <button type="submit" class="btn btn-primary" id="studentSubmitBtn">บันทึก</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal ยา -->
+    <div id="medicineModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="medicineModalTitle">➕ เพิ่มยาใหม่</h2>
+                <span class="close" onclick="closeMedicineModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="medicineForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">ชื่อยา *</label>
+                            <input type="text" id="medicineName" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">จำนวนเริ่มต้น *</label>
+                            <input type="number" id="medicineQuantity" class="form-control" required min="0" step="0.5">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">หน่วย *</label>
+                            <select id="medicineUnit" class="form-control" required>
+                                <option value="">-- เลือกหน่วย --</option>
+                                <option value="เม็ด">เม็ด</option>
+                                <option value="แคปซูล">แคปซูล</option>
+                                <option value="ช้อนชา">ช้อนชา</option>
+                                <option value="ช้อนโต๊ะ">ช้อนโต๊ะ</option>
+                                <option value="มล.">มล.</option>
+                                <option value="หยด">หยด</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">วันหมดอายุ</label>
+                            <input type="date" id="medicineExpiry" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">การให้ยา (เวลาและขนาด)</label>
+                        <div id="dosageContainer">
+                            <div class="dosage-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <input type="time" class="form-control dosage-time" placeholder="เวลา" style="flex: 1;">
+                                <input type="number" class="form-control dosage-amount" placeholder="จำนวน" step="0.5" min="0" style="flex: 1;">
+                                <button type="button" class="btn btn-danger" onclick="removeDosageRow(this)">ลบ</button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn" onclick="addDosageRow()" 
+                                style="background: #28a745; color: white; margin-top: 10px;">+ เพิ่มเวลาให้ยา</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">วิธีใช้</label>
+                        <textarea id="medicineInstructions" class="form-control" rows="2" 
+                                  placeholder="เช่น กินหลังอาหาร, กินก่อนนอน..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">หมายเหตุ</label>
+                        <textarea id="medicineNotes" class="form-control" rows="2" 
+                                  placeholder="ข้อมูลเพิ่มเติมเกี่ยวกับยา..."></textarea>
+                    </div>
+
+                    <div style="text-align: right; margin-top: 30px;">
+                        <button type="button" class="btn" onclick="closeMedicineModal()" 
+                                style="background: #6c757d; color: white; margin-right: 10px;">ยกเลิก</button>
+                        <button type="submit" class="btn btn-success" id="medicineSubmitBtn">บันทึก</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ข้อมูลส่วนกลาง
+        let students = JSON.parse(localStorage.getItem('students')) || [];
+        let medicines = JSON.parse(localStorage.getItem('medicines')) || [];
+        let currentEditingStudent = null;
+        let currentEditingMedicine = null;
+        let currentStudentId = null;
+
+        // เริ่มต้นระบบ
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStudents();
+            updateStudentSelect();
+            
+            // เพิ่ม event listener สำหรับฟอร์ม
+            document.getElementById('studentForm').addEventListener('submit', saveStudent);
+            document.getElementById('medicineForm').addEventListener('submit', saveMedicine);
+        });
+
+        // ฟังก์ชั่นเปลี่ยน Tab
+        function showTab(tabName) {
+            // ซ่อน tab ทั้งหมด
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // แสดง tab ที่เลือก
+            document.getElementById(tabName + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // ===== ฟังก์ชั่นจัดการนักเรียน =====
+        
+        function openStudentModal(studentId = null) {
+            const modal = document.getElementById('studentModal');
+            const title = document.getElementById('studentModalTitle');
+            const submitBtn = document.getElementById('studentSubmitBtn');
+
+            if (studentId) {
+                // แก้ไขนักเรียน
+                const student = students.find(s => s.id === studentId);
+                currentEditingStudent = studentId;
+                title.textContent = '✏️ แก้ไขข้อมูลนักเรียน';
+                submitBtn.textContent = 'อัปเดต';
+                
+                // ใส่ข้อมูลในฟอร์ม
+                document.getElementById('studentId').value = student.id;
+                document.getElementById('studentRoom').value = student.room;
+                document.getElementById('studentFirstName').value = student.firstName;
+                document.getElementById('studentLastName').value = student.lastName;
+                document.getElementById('studentAge').value = student.age;
+                document.getElementById('parentPhone').value = student.parentPhone || '';
+                document.getElementById('allergies').value = student.allergies || '';
+                document.getElementById('studentNotes').value = student.notes || '';
+            } else {
+                // เพิ่มนักเรียนใหม่
+                currentEditingStudent = null;
+                title.textContent = '➕ เพิ่มนักเรียนใหม่';
+                submitBtn.textContent = 'บันทึก';
+                document.getElementById('studentForm').reset();
+            }
+
+            modal.style.display = 'block';
+        }
+
+        function closeStudentModal() {
+            document.getElementById('studentModal').style.display = 'none';
+            document.getElementById('studentForm').reset();
+            currentEditingStudent = null;
+        }
+
+        function saveStudent(event) {
+            event.preventDefault();
+            
+            const studentData = {
+                id: document.getElementById('studentId').value,
+                room: document.getElementById('studentRoom').value,
+                firstName: document.getElementById('studentFirstName').value,
+                lastName: document.getElementById('studentLastName').value,
+                age: parseInt(document.getElementById('studentAge').value),
+                parentPhone: document.getElementById('parentPhone').value,
+                allergies: document.getElementById('allergies').value,
+                notes: document.getElementById('studentNotes').value,
+                createdAt: currentEditingStudent ? 
+                    students.find(s => s.id === currentEditingStudent).createdAt : 
+                    new Date().toISOString()
+            };
+
+            if (currentEditingStudent) {
+                // อัปเดตนักเรียน
+                const index = students.findIndex(s => s.id === currentEditingStudent);
+                students[index] = studentData;
+                showAlert('อัปเดตข้อมูลนักเรียนเรียบร้อยแล้ว', 'success');
+            } else {
+                // ตรวจสอบรหัสซ้ำ
+                if (students.find(s => s.id === studentData.id)) {
+                    showAlert('รหัสนักเรียนนี้มีอยู่แล้ว', 'danger');
+                    return;
+                }
+                students.push(studentData);
+                showAlert('เพิ่มนักเรียนใหม่เรียบร้อยแล้ว', 'success');
+            }
+
+            localStorage.setItem('students', JSON.stringify(students));
+            loadStudents();
+            updateStudentSelect();
+            closeStudentModal();
+        }
+
+        function deleteStudent(studentId) {
+            if (confirm('คุณแน่ใจหรือไม่ที่จะลบนักเรียนคนนี้?\n(ข้อมูลยาทั้งหมดจะถูกลบด้วย)')) {
+                // ลบนักเรียน
+                students = students.filter(s => s.id !== studentId);
+                // ลบยาของนักเรียน
+                medicines = medicines.filter(m => m.studentId !== studentId);
+                
+                localStorage.setItem('students', JSON.stringify(students));
+                localStorage.setItem('medicines', JSON.stringify(medicines));
+                
+                loadStudents();
+                updateStudentSelect();
+                
+                // ถ้ากำลังดูยาของนักเรียนที่ลบ ให้รีเซ็ต
+                if (currentStudentId === studentId) {
+                    currentStudentId = null;
+                    document.getElementById('studentSelect').value = '';
+                    loadStudentMedicines();
+                }
+                
+                showAlert('ลบนักเรียนเรียบร้อยแล้ว', 'success');
+            }
+        }
+
+        function loadStudents() {
+            const tbody = document.getElementById('studentsTableBody');
+            tbody.innerHTML = '';
+
+            if (students.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 40px; color: #6c757d;">
+                            <h4>ยังไม่มีนักเรียนในระบบ</h4>
+                            <p>เริ่มต้นด้วยการเพิ่มนักเรียนคนแรก</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            students.forEach(student => {
+                const studentMedicines = medicines.filter(m => m.studentId === student.id);
+                const medicineCount = studentMedicines.length;
+                
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td><strong>${student.id}</strong></td>
+                    <td>${student.firstName} ${student.lastName}</td>
+                    <td><span class="status-badge status-sufficient">${student.room}</span></td>
+                    <td>${student.age} ปี</td>
+                    <td>${student.allergies ? '⚠️ มี' : '✅ ไม่มี'}</td>
+                    <td><strong>${medicineCount}</strong> รายการ</td>
+                    <td>
+                        <button class="btn btn-warning" onclick="openStudentModal('${student.id}')" 
+                                style="margin-right: 5px; padding: 8px 12px;">
+                            ✏️ แก้ไข
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteStudent('${student.id}')"
+                                style="padding: 8px 12px;">
+                            🗑️ ลบ
+                        </button>
+                    </td>
+                `;
+            });
+        }
+
+        function searchStudents() {
+            const searchTerm = document.getElementById('studentSearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#studentsTableBody tr');
+
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        }
+
+        // ===== ฟังก์ชั่นจัดการยา =====
+
+        function updateStudentSelect() {
+            const select = document.getElementById('studentSelect');
+            select.innerHTML = '<option value="">-- เลือกนักเรียน --</option>';
+
+            students.forEach(student => {
+                const option = document.createElement('option');
+                option.value = student.id;
+                option.textContent = `${student.id} - ${student.firstName} ${student.lastName} (${student.room})`;
+                select.appendChild(option);
+            });
+        }
+
+        function loadStudentMedicines() {
+            const studentId = document.getElementById('studentSelect').value;
+            const container = document.getElementById('medicinesContainer');
+            const addBtn = document.getElementById('addMedicineBtn');
+
+            currentStudentId = studentId;
+
+            if (!studentId) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>🔍 เลือกนักเรียนเพื่อจัดการยา</h3>
+                        <p>กรุณาเลือกนักเรียนจากรายการด้านบนเพื่อดูและจัดการยาส่วนตัว</p>
+                    </div>
+                `;
+                addBtn.disabled = true;
+                return;
+            }
+
+            addBtn.disabled = false;
+            const student = students.find(s => s.id === studentId);
+            const studentMedicines = medicines.filter(m => m.studentId === studentId);
+
+            if (studentMedicines.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>💊 ยังไม่มียาสำหรับ ${student.firstName} ${student.lastName}</h3>
+                        <p>เริ่มต้นด้วยการเพิ่มยาชนิดแรก</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            studentMedicines.forEach(medicine => {
+                const statusClass = getStockStatus(medicine.currentQuantity);
+                const dosageText = medicine.dosages ? 
+                    medicine.dosages.map(d => `${d.time} - ${d.amount} ${medicine.unit}`).join(', ') : 
+                    'ไม่ระบุ';
+
+                html += `
+                    <div class="medicine-card">
+                        <div class="medicine-header">
+                            <div class="medicine-name">${medicine.name}</div>
+                            <div class="medicine-actions">
+                                <button class="btn btn-warning" onclick="openMedicineModal('${medicine.id}')"
+                                        style="padding: 8px 12px;">
+                                    ✏️ แก้ไข
+                                </button>
+                                <button class="btn btn-danger" onclick="deleteMedicine('${medicine.id}')"
+                                        style="padding: 8px 12px;">
+                                    🗑️ ลบ
+                                </button>
+                            </div>
+                        </div>
+                        <div class="medicine-info">
+                            <div class="info-item">
+                                <span class="info-label">จำนวนคงเหลือ:</span>
+                                <span class="info-value">
+                                    <strong>${medicine.currentQuantity} ${medicine.unit}</strong>
+                                    <span class="status-badge ${statusClass}">
+                                        ${getStockStatusText(medicine.currentQuantity)}
+                                    </span>
+                                </span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">วันหมดอายุ:</span>
+                                <span class="info-value">${medicine.expiryDate || 'ไม่ระบุ'}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">เวลาให้ยา:</span>
+                                <span class="info-value">${dosageText}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">วิธีใช้:</span>
+                                <span class="info-value">${medicine.instructions || 'ไม่ระบุ'}</span>
+                            </div>
+                        </div>
+                        ${medicine.notes ? `<div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px;"><strong>หมายเหตุ:</strong> ${medicine.notes}</div>` : ''}
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function getStockStatus(quantity) {
+            if (quantity <= 5) return 'status-critical';
+            if (quantity <= 15) return 'status-low';
+            return 'status-sufficient';
+        }
+
+        function getStockStatusText(quantity) {
+            if (quantity <= 5) return 'ใกล้หมด';
+            if (quantity <= 15) return 'เหลือน้อย';
+            return 'เพียงพอ';
+        }
+
+        function openMedicineModal(medicineId = null) {
+            if (!currentStudentId) {
+                showAlert('กรุณาเลือกนักเรียนก่อน', 'danger');
+                return;
+            }
+
+            const modal = document.getElementById('medicineModal');
+            const title = document.getElementById('medicineModalTitle');
+            const submitBtn = document.getElementById('medicineSubmitBtn');
+
+            if (medicineId) {
+                // แก้ไขยา
+                const medicine = medicines.find(m => m.id === medicineId);
+                currentEditingMedicine = medicineId;
+                title.textContent = '✏️ แก้ไขข้อมูลยา';
+                submitBtn.textContent = 'อัปเดต';
+                
+                // ใส่ข้อมูลในฟอร์ม
+                document.getElementById('medicineName').value = medicine.name;
+                document.getElementById('medicineQuantity').value = medicine.currentQuantity;
+                document.getElementById('medicineUnit').value = medicine.unit;
+                document.getElementById('medicineExpiry').value = medicine.expiryDate || '';
+                document.getElementById('medicineInstructions').value = medicine.instructions || '';
+                document.getElementById('medicineNotes').value = medicine.notes || '';
+
+                // โหลด dosages
+                loadDosages(medicine.dosages || []);
+            } else {
+                // เพิ่มยาใหม่
+                currentEditingMedicine = null;
+                title.textContent = '➕ เพิ่มยาใหม่';
+                submitBtn.textContent = 'บันทึก';
+                document.getElementById('medicineForm').reset();
+                resetDosages();
+            }
+
+            modal.style.display = 'block';
+        }
+
+        function closeMedicineModal() {
+            document.getElementById('medicineModal').style.display = 'none';
+            document.getElementById('medicineForm').reset();
+            currentEditingMedicine = null;
+            resetDosages();
+        }
+
+        function saveMedicine(event) {
+            event.preventDefault();
+            
+            // รวบรวม dosages
+            const dosages = [];
+            const dosageRows = document.querySelectorAll('.dosage-row');
+            dosageRows.forEach(row => {
+                const time = row.querySelector('.dosage-time').value;
+                const amount = row.querySelector('.dosage-amount').value;
+                if (time && amount) {
+                    dosages.push({ time, amount: parseFloat(amount) });
+                }
+            });
+
+            const medicineData = {
+                id: currentEditingMedicine || 'med_' + Date.now(),
+                studentId: currentStudentId,
+                name: document.getElementById('medicineName').value,
+                currentQuantity: parseFloat(document.getElementById('medicineQuantity').value),
+                unit: document.getElementById('medicineUnit').value,
+                expiryDate: document.getElementById('medicineExpiry').value,
+                dosages: dosages,
+                instructions: document.getElementById('medicineInstructions').value,
+                notes: document.getElementById('medicineNotes').value,
+                createdAt: currentEditingMedicine ? 
+                    medicines.find(m => m.id === currentEditingMedicine).createdAt : 
+                    new Date().toISOString()
+            };
+
+            if (currentEditingMedicine) {
+                // อัปเดตยา
+                const index = medicines.findIndex(m => m.id === currentEditingMedicine);
+                medicines[index] = medicineData;
+                showAlert('อัปเดตข้อมูลยาเรียบร้อยแล้ว', 'success');
+            } else {
+                medicines.push(medicineData);
+                showAlert('เพิ่มยาใหม่เรียบร้อยแล้ว', 'success');
+            }
+
+            localStorage.setItem('medicines', JSON.stringify(medicines));
+            loadStudentMedicines();
+            closeMedicineModal();
+        }
+
+        function deleteMedicine(medicineId) {
+            if (confirm('คุณแน่ใจหรือไม่ที่จะลบยานี้?')) {
+                medicines = medicines.filter(m => m.id !== medicineId);
+                localStorage.setItem('medicines', JSON.stringify(medicines));
+                loadStudentMedicines();
+                showAlert('ลบยาเรียบร้อยแล้ว', 'success');
+            }
+        }
+
+        // ===== ฟังก์ชั่น Dosage =====
+
+        function addDosageRow() {
+            const container = document.getElementById('dosageContainer');
+            const newRow = document.createElement('div');
+            newRow.className = 'dosage-row';
+            newRow.style.display = 'flex';
+            newRow.style.gap = '10px';
+            newRow.style.marginBottom = '10px';
+            newRow.innerHTML = `
+                <input type="time" class="form-control dosage-time" placeholder="เวลา" style="flex: 1;">
+                <input type="number" class="form-control dosage-amount" placeholder="จำนวน" step="0.5" min="0" style="flex: 1;">
+                <button type="button" class="btn btn-danger" onclick="removeDosageRow(this)">ลบ</button>
+            `;
+            container.appendChild(newRow);
+        }
+
+        function removeDosageRow(button) {
+            button.parentElement.remove();
+        }
+
+        function resetDosages() {
+            const container = document.getElementById('dosageContainer');
+            container.innerHTML = `
+                <div class="dosage-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <input type="time" class="form-control dosage-time" placeholder="เวลา" style="flex: 1;">
+                    <input type="number" class="form-control dosage-amount" placeholder="จำนวน" step="0.5" min="0" style="flex: 1;">
+                    <button type="button" class="btn btn-danger" onclick="removeDosageRow(this)">ลบ</button>
+                </div>
+            `;
+        }
+
+        function loadDosages(dosages) {
+            const container = document.getElementById('dosageContainer');
+            container.innerHTML = '';
+            
+            if (dosages.length === 0) {
+                resetDosages();
+                return;
+            }
+
+            dosages.forEach(dosage => {
+                const row = document.createElement('div');
+                row.className = 'dosage-row';
+                row.style.display = 'flex';
+                row.style.gap = '10px';
+                row.style.marginBottom = '10px';
+                row.innerHTML = `
+                    <input type="time" class="form-control dosage-time" value="${dosage.time}" style="flex: 1;">
+                    <input type="number" class="form-control dosage-amount" value="${dosage.amount}" step="0.5" min="0" style="flex: 1;">
+                    <button type="button" class="btn btn-danger" onclick="removeDosageRow(this)">ลบ</button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        // ===== ฟังก์ชั่นทั่วไป =====
+
+        function showAlert(message, type) {
+            // สร้าง alert element
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            alert.style.position = 'fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '9999';
+            alert.style.minWidth = '300px';
+            alert.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+
+            document.body.appendChild(alert);
+
+            // ลบหลัง 3 วินาที
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.parentNode.removeChild(alert);
+                }
+            }, 3000);
+        }
+
+        // ปิด modal เมื่อคลิกนอก modal
+        window.addEventListener('click', function(event) {
+            const studentModal = document.getElementById('studentModal');
+            const medicineModal = document.getElementById('medicineModal');
+            
+            if (event.target === studentModal) {
+                closeStudentModal();
+            }
+            if (event.target === medicineModal) {
+                closeMedicineModal();
+            }
+        });
+    </script>
+</body>
+</html>
