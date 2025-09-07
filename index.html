@@ -1234,6 +1234,30 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }
+
+        /* Error Display */
+        .error-message {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
+        .debug-info {
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            color: #374151;
+            max-height: 200px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -1621,13 +1645,38 @@
         </div>
     </div>
 
+    <!-- Debug Modal -->
+    <div id="debugModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>ข้อมูลการแก้ไขปัญหา</h2>
+                <span class="close" onclick="closeDebugModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="debugInfo" class="debug-info">
+                    <!-- Debug information will be displayed here -->
+                </div>
+                <div style="text-align: right; margin-top: 20px;">
+                    <button class="btn btn-secondary" onclick="closeDebugModal()">ปิด</button>
+                    <button class="btn btn-info" onclick="copyDebugInfo()">คัดลอกข้อมูล</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Supabase Configuration
         const SUPABASE_URL = 'https://dafonmeissfrrovkuyxv.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhZm9ubWVpc3NmcnJvdmt1eXh2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxNjkxNjQsImV4cCI6MjA3Mjc0NTE2NH0.qyIUTVnwER0Q2OqLNJXUVzTVu2qmaLCgdn42f4Q3iS8';
         
         // Initialize Supabase client
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let supabase;
+        try {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch (error) {
+            console.error('Supabase initialization error:', error);
+            showAlert('ไม่สามารถเชื่อมต่อ Supabase ได้', 'danger');
+        }
         
         // Global Variables
         let students = [];
@@ -1639,6 +1688,7 @@
         let currentStudentId = null;
         let autoDispenseInterval = null;
         let isLoading = false;
+        let debugLog = [];
 
         // Configuration for alerts
         const ALERT_CONFIG = {
@@ -1646,6 +1696,101 @@
             CRITICAL_STOCK_THRESHOLD: 5,
             EXPIRY_WARNING_DAYS: 30
         };
+
+        // Debug Functions
+        function addDebugLog(message, data = null) {
+            const timestamp = new Date().toISOString();
+            const logEntry = {
+                timestamp,
+                message,
+                data: data ? JSON.parse(JSON.stringify(data)) : null
+            };
+            debugLog.push(logEntry);
+            console.log(`[${timestamp}] ${message}`, data);
+            
+            // Keep only last 100 entries
+            if (debugLog.length > 100) {
+                debugLog = debugLog.slice(-100);
+            }
+        }
+
+        function showDebugModal() {
+            const modal = document.getElementById('debugModal');
+            const container = document.getElementById('debugInfo');
+            
+            let html = debugLog.map(entry => {
+                const time = new Date(entry.timestamp).toLocaleTimeString('th-TH');
+                let dataStr = '';
+                if (entry.data) {
+                    dataStr = `\nData: ${JSON.stringify(entry.data, null, 2)}`;
+                }
+                return `[${time}] ${entry.message}${dataStr}`;
+            }).join('\n\n');
+            
+            container.textContent = html;
+            modal.style.display = 'block';
+        }
+
+        function closeDebugModal() {
+            document.getElementById('debugModal').style.display = 'none';
+        }
+
+        function copyDebugInfo() {
+            const info = document.getElementById('debugInfo').textContent;
+            navigator.clipboard.writeText(info).then(() => {
+                showAlert('คัดลอกข้อมูลแล้ว', 'success');
+            });
+        }
+
+        // Error Handling Functions
+        function handleError(error, context = '') {
+            const errorMessage = error.message || 'Unknown error';
+            const errorDetail = {
+                context,
+                error: errorMessage,
+                stack: error.stack,
+                timestamp: new Date().toISOString()
+            };
+            
+            addDebugLog(`Error in ${context}: ${errorMessage}`, errorDetail);
+            
+            // Show user-friendly error message
+            let userMessage = 'เกิดข้อผิดพลาด';
+            if (context) {
+                userMessage += ` ใน${context}`;
+            }
+            userMessage += `: ${errorMessage}`;
+            
+            showAlert(userMessage, 'danger');
+            
+            // Show debug button for developers
+            if (debugLog.length > 0) {
+                setTimeout(() => {
+                    const debugBtn = document.createElement('button');
+                    debugBtn.textContent = '🔧 แสดงข้อมูลแก้ไขปัญหา';
+                    debugBtn.className = 'btn btn-info btn-sm';
+                    debugBtn.onclick = showDebugModal;
+                    debugBtn.style.position = 'fixed';
+                    debugBtn.style.bottom = '20px';
+                    debugBtn.style.right = '20px';
+                    debugBtn.style.zIndex = '9999';
+                    
+                    // Remove existing debug button
+                    const existing = document.querySelector('.debug-btn');
+                    if (existing) existing.remove();
+                    
+                    debugBtn.classList.add('debug-btn');
+                    document.body.appendChild(debugBtn);
+                    
+                    // Auto remove after 10 seconds
+                    setTimeout(() => {
+                        if (debugBtn.parentNode) {
+                            debugBtn.parentNode.removeChild(debugBtn);
+                        }
+                    }, 10000);
+                }, 500);
+            }
+        }
 
         // Loading Management
         function showLoading(show) {
@@ -1675,26 +1820,36 @@
             // Disable buttons during loading
             const buttons = document.querySelectorAll('button, input[type="submit"]');
             buttons.forEach(btn => {
-                btn.disabled = show;
+                if (show) {
+                    btn.dataset.wasDisabled = btn.disabled;
+                    btn.disabled = true;
+                } else {
+                    btn.disabled = btn.dataset.wasDisabled === 'true';
+                }
             });
         }
 
         // Database Functions
         async function testConnection() {
             try {
-                console.log('Testing Supabase connection...');
-                const { data, error } = await supabase.from('students').select('count', { count: 'exact' });
+                addDebugLog('Testing Supabase connection...');
+                if (!supabase) {
+                    throw new Error('Supabase client not initialized');
+                }
+                
+                const { data, error, count } = await supabase
+                    .from('students')
+                    .select('*', { count: 'exact', head: true });
+                    
                 if (error) {
-                    console.error('Connection test failed:', error);
-                    showAlert('การเชื่อมต่อฐานข้อมูลล้มเหลว: ' + error.message, 'danger');
-                    return false;
+                    addDebugLog('Connection test failed', error);
+                    throw error;
                 } else {
-                    console.log('Connection successful, student count:', data);
+                    addDebugLog('Connection successful', { count });
                     return true;
                 }
             } catch (err) {
-                console.error('Connection error:', err);
-                showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message, 'danger');
+                handleError(err, 'การทดสอบการเชื่อมต่อ');
                 return false;
             }
         }
@@ -1702,6 +1857,7 @@
         async function initDatabase() {
             try {
                 showLoading(true);
+                addDebugLog('Initializing database...');
                 
                 // Test connection first
                 const connected = await testConnection();
@@ -1712,8 +1868,7 @@
                 showAlert('โหลดข้อมูลเรียบร้อยแล้ว', 'success');
                 return true;
             } catch (error) {
-                console.error('Database initialization error:', error);
-                showAlert('เกิดข้อผิดพลาดในการเริ่มต้นฐานข้อมูล: ' + error.message, 'danger');
+                handleError(error, 'การเริ่มต้นฐานข้อมูล');
                 return false;
             } finally {
                 showLoading(false);
@@ -1722,13 +1877,16 @@
 
         async function initializeSideEffectsTable() {
             try {
-                // Check if side_effects table exists, if not, we'll handle it gracefully
-                const { data, error } = await supabase.from('side_effects').select('count', { count: 'exact' });
+                addDebugLog('Initializing side effects table...');
+                const { data, error } = await supabase
+                    .from('side_effects')
+                    .select('count', { count: 'exact', head: true });
+                
                 if (error && error.code === '42P01') {
-                    console.log('Side effects table does not exist yet');
+                    addDebugLog('Side effects table does not exist yet');
                     sideEffects = [];
                 } else if (error) {
-                    console.error('Side effects table check error:', error);
+                    addDebugLog('Side effects table check error', error);
                     sideEffects = [];
                 } else {
                     // Load side effects data
@@ -1738,22 +1896,22 @@
                         .order('created_at', { ascending: false });
                     
                     if (loadError) {
-                        console.error('Side effects load error:', loadError);
+                        addDebugLog('Side effects load error', loadError);
                         sideEffects = [];
                     } else {
                         sideEffects = sideEffectsData || [];
-                        console.log('Loaded side effects:', sideEffects.length);
+                        addDebugLog('Loaded side effects', { count: sideEffects.length });
                     }
                 }
             } catch (error) {
-                console.error('Side effects initialization error:', error);
+                addDebugLog('Side effects initialization error', error);
                 sideEffects = [];
             }
         }
 
         async function loadFromDatabase() {
             try {
-                console.log('Loading data from database...');
+                addDebugLog('Loading data from database...');
                 
                 // Load students
                 const { data: studentsData, error: studentsError } = await supabase
@@ -1762,11 +1920,11 @@
                     .order('created_at', { ascending: false });
                 
                 if (studentsError) {
-                    console.error('Students load error:', studentsError);
+                    addDebugLog('Students load error', studentsError);
                     throw studentsError;
                 }
                 students = studentsData || [];
-                console.log('Loaded students:', students.length);
+                addDebugLog('Loaded students', { count: students.length });
 
                 // Load medicines
                 const { data: medicinesData, error: medicinesError } = await supabase
@@ -1775,11 +1933,11 @@
                     .order('created_at', { ascending: false });
                 
                 if (medicinesError) {
-                    console.error('Medicines load error:', medicinesError);
+                    addDebugLog('Medicines load error', medicinesError);
                     throw medicinesError;
                 }
                 medicines = medicinesData || [];
-                console.log('Loaded medicines:', medicines.length);
+                addDebugLog('Loaded medicines', { count: medicines.length });
 
                 // Load medicine history
                 const { data: historyData, error: historyError } = await supabase
@@ -1788,14 +1946,14 @@
                     .order('created_at', { ascending: false });
                 
                 if (historyError) {
-                    console.error('History load error:', historyError);
+                    addDebugLog('History load error', historyError);
                     throw historyError;
                 }
                 medicineHistory = historyData || [];
-                console.log('Loaded history:', medicineHistory.length);
+                addDebugLog('Loaded history', { count: medicineHistory.length });
 
             } catch (error) {
-                console.error('Error loading data:', error);
+                handleError(error, 'การโหลดข้อมูล');
                 throw error;
             }
         }
@@ -1803,32 +1961,34 @@
         async function saveStudent(studentData, isUpdate = false) {
             try {
                 showLoading(true);
-                console.log('Saving student:', studentData, 'isUpdate:', isUpdate);
+                addDebugLog('Saving student', { studentData, isUpdate });
                 
                 if (isUpdate) {
-                    console.log('Updating student with ID:', studentData.id);
+                    addDebugLog('Updating student with ID', { id: studentData.id });
+                    const updateData = {
+                        room: studentData.room,
+                        first_name: studentData.firstName,
+                        last_name: studentData.lastName,
+                        age: studentData.age,
+                        parent_phone: studentData.parentPhone,
+                        allergies: studentData.allergies,
+                        status: studentData.status,
+                        notes: studentData.notes,
+                        updated_at: new Date().toISOString()
+                    };
+                    
                     const { data, error } = await supabase
                         .from('students')
-                        .update({
-                            room: studentData.room,
-                            first_name: studentData.firstName,
-                            last_name: studentData.lastName,
-                            age: studentData.age,
-                            parent_phone: studentData.parentPhone,
-                            allergies: studentData.allergies,
-                            status: studentData.status,
-                            notes: studentData.notes,
-                            updated_at: new Date().toISOString()
-                        })
+                        .update(updateData)
                         .eq('student_id', studentData.id)
                         .select();
                     
                     if (error) {
-                        console.error('Update error:', error);
+                        addDebugLog('Update error', error);
                         throw error;
                     }
                     
-                    console.log('Update successful:', data);
+                    addDebugLog('Update successful', data);
                     
                     // Update local data
                     const index = students.findIndex(s => s.student_id === studentData.id);
@@ -1837,7 +1997,7 @@
                     }
                 } else {
                     // Check if student ID already exists
-                    console.log('Checking if student exists:', studentData.id);
+                    addDebugLog('Checking if student exists', { id: studentData.id });
                     const { data: existingStudent, error: checkError } = await supabase
                         .from('students')
                         .select('student_id')
@@ -1845,43 +2005,45 @@
                         .single();
                     
                     if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found
-                        console.error('Check error:', checkError);
+                        addDebugLog('Check error', checkError);
                         throw checkError;
                     }
                     
                     if (existingStudent) {
-                        console.log('Student already exists');
+                        addDebugLog('Student already exists');
                         throw new Error('รหัสนักเรียนนี้มีอยู่แล้ว');
                     }
                     
-                    console.log('Inserting new student');
+                    addDebugLog('Inserting new student');
+                    const insertData = {
+                        student_id: studentData.id,
+                        room: studentData.room,
+                        first_name: studentData.firstName,
+                        last_name: studentData.lastName,
+                        age: studentData.age,
+                        parent_phone: studentData.parentPhone,
+                        allergies: studentData.allergies,
+                        status: studentData.status,
+                        notes: studentData.notes
+                    };
+                    
                     const { data, error } = await supabase
                         .from('students')
-                        .insert([{
-                            student_id: studentData.id,
-                            room: studentData.room,
-                            first_name: studentData.firstName,
-                            last_name: studentData.lastName,
-                            age: studentData.age,
-                            parent_phone: studentData.parentPhone,
-                            allergies: studentData.allergies,
-                            status: studentData.status,
-                            notes: studentData.notes
-                        }])
+                        .insert([insertData])
                         .select();
                     
                     if (error) {
-                        console.error('Insert error:', error);
+                        addDebugLog('Insert error', error);
                         throw error;
                     }
                     
-                    console.log('Insert successful:', data);
+                    addDebugLog('Insert successful', data);
                     students.unshift(data[0]);
                 }
                 
                 return true;
             } catch (error) {
-                console.error('Error saving student:', error);
+                handleError(error, 'การบันทึกข้อมูลนักเรียน');
                 throw error;
             } finally {
                 showLoading(false);
@@ -1890,7 +2052,7 @@
 
         async function updateStudentStatus(studentId, newStatus) {
             try {
-                console.log('Updating student status:', studentId, 'to', newStatus);
+                addDebugLog('Updating student status', { studentId, newStatus });
                 
                 const { data, error } = await supabase
                     .from('students')
@@ -1902,11 +2064,11 @@
                     .select();
                 
                 if (error) {
-                    console.error('Status update error:', error);
+                    addDebugLog('Status update error', error);
                     throw error;
                 }
                 
-                console.log('Status update successful:', data);
+                addDebugLog('Status update successful', data);
                 
                 // Update local data
                 const index = students.findIndex(s => s.student_id === studentId);
@@ -1916,7 +2078,7 @@
                 
                 return true;
             } catch (error) {
-                console.error('Error updating student status:', error);
+                handleError(error, 'การอัปเดตสถานะนักเรียน');
                 throw error;
             }
         }
@@ -1924,7 +2086,7 @@
         async function deleteStudentFromDB(studentId) {
             try {
                 showLoading(true);
-                console.log('Deleting student:', studentId);
+                addDebugLog('Deleting student', { studentId });
                 
                 // Delete related medicines first
                 await supabase.from('medicines').delete().eq('student_id', studentId);
@@ -1936,17 +2098,17 @@
                 try {
                     await supabase.from('side_effects').delete().eq('student_id', studentId);
                 } catch (error) {
-                    console.log('Side effects deletion skipped (table may not exist)');
+                    addDebugLog('Side effects deletion skipped (table may not exist)');
                 }
                 
                 // Delete student
                 const { error } = await supabase.from('students').delete().eq('student_id', studentId);
                 if (error) {
-                    console.error('Delete error:', error);
+                    addDebugLog('Delete error', error);
                     throw error;
                 }
                 
-                console.log('Delete successful');
+                addDebugLog('Delete successful');
                 
                 // Update local data
                 students = students.filter(s => s.student_id !== studentId);
@@ -1956,7 +2118,7 @@
                 
                 return true;
             } catch (error) {
-                console.error('Error deleting student:', error);
+                handleError(error, 'การลบนักเรียน');
                 throw error;
             } finally {
                 showLoading(false);
@@ -1966,32 +2128,34 @@
         async function saveMedicine(medicineData, isUpdate = false) {
             try {
                 showLoading(true);
-                console.log('Saving medicine:', medicineData, 'isUpdate:', isUpdate);
+                addDebugLog('Saving medicine', { medicineData, isUpdate });
                 
                 if (isUpdate) {
+                    const updateData = {
+                        name: medicineData.name,
+                        current_quantity: medicineData.currentQuantity,
+                        unit: medicineData.unit,
+                        expiry_date: medicineData.expiryDate || null,
+                        dosages: medicineData.dosages,
+                        instructions: medicineData.instructions,
+                        notes: medicineData.notes,
+                        min_stock_alert: medicineData.minStockAlert || ALERT_CONFIG.LOW_STOCK_THRESHOLD,
+                        critical_stock_alert: medicineData.criticalStockAlert || ALERT_CONFIG.CRITICAL_STOCK_THRESHOLD,
+                        updated_at: new Date().toISOString()
+                    };
+                    
                     const { data, error } = await supabase
                         .from('medicines')
-                        .update({
-                            name: medicineData.name,
-                            current_quantity: medicineData.currentQuantity,
-                            unit: medicineData.unit,
-                            expiry_date: medicineData.expiryDate,
-                            dosages: medicineData.dosages,
-                            instructions: medicineData.instructions,
-                            notes: medicineData.notes,
-                            min_stock_alert: medicineData.minStockAlert || ALERT_CONFIG.LOW_STOCK_THRESHOLD,
-                            critical_stock_alert: medicineData.criticalStockAlert || ALERT_CONFIG.CRITICAL_STOCK_THRESHOLD,
-                            updated_at: new Date().toISOString()
-                        })
+                        .update(updateData)
                         .eq('id', medicineData.id)
                         .select();
                     
                     if (error) {
-                        console.error('Medicine update error:', error);
+                        addDebugLog('Medicine update error', error);
                         throw error;
                     }
                     
-                    console.log('Medicine update successful:', data);
+                    addDebugLog('Medicine update successful', data);
                     
                     // Update local data
                     const index = medicines.findIndex(m => m.id === medicineData.id);
@@ -1999,34 +2163,36 @@
                         medicines[index] = data[0];
                     }
                 } else {
+                    const insertData = {
+                        student_id: medicineData.studentId,
+                        name: medicineData.name,
+                        current_quantity: medicineData.currentQuantity,
+                        unit: medicineData.unit,
+                        expiry_date: medicineData.expiryDate || null,
+                        dosages: medicineData.dosages,
+                        instructions: medicineData.instructions,
+                        notes: medicineData.notes,
+                        min_stock_alert: medicineData.minStockAlert || ALERT_CONFIG.LOW_STOCK_THRESHOLD,
+                        critical_stock_alert: medicineData.criticalStockAlert || ALERT_CONFIG.CRITICAL_STOCK_THRESHOLD
+                    };
+                    
                     const { data, error } = await supabase
                         .from('medicines')
-                        .insert([{
-                            student_id: medicineData.studentId,
-                            name: medicineData.name,
-                            current_quantity: medicineData.currentQuantity,
-                            unit: medicineData.unit,
-                            expiry_date: medicineData.expiryDate,
-                            dosages: medicineData.dosages,
-                            instructions: medicineData.instructions,
-                            notes: medicineData.notes,
-                            min_stock_alert: medicineData.minStockAlert || ALERT_CONFIG.LOW_STOCK_THRESHOLD,
-                            critical_stock_alert: medicineData.criticalStockAlert || ALERT_CONFIG.CRITICAL_STOCK_THRESHOLD
-                        }])
+                        .insert([insertData])
                         .select();
                     
                     if (error) {
-                        console.error('Medicine insert error:', error);
+                        addDebugLog('Medicine insert error', error);
                         throw error;
                     }
                     
-                    console.log('Medicine insert successful:', data);
+                    addDebugLog('Medicine insert successful', data);
                     medicines.unshift(data[0]);
                 }
                 
                 return true;
             } catch (error) {
-                console.error('Error saving medicine:', error);
+                handleError(error, 'การบันทึกข้อมูลยา');
                 throw error;
             } finally {
                 showLoading(false);
@@ -2036,7 +2202,7 @@
         async function deleteMedicineFromDB(medicineId) {
             try {
                 showLoading(true);
-                console.log('Deleting medicine:', medicineId);
+                addDebugLog('Deleting medicine', { medicineId });
                 
                 // Delete related history
                 await supabase.from('medicine_history').delete().eq('medicine_id', medicineId);
@@ -2045,17 +2211,17 @@
                 try {
                     await supabase.from('side_effects').delete().eq('medicine_id', medicineId);
                 } catch (error) {
-                    console.log('Side effects deletion skipped (table may not exist)');
+                    addDebugLog('Side effects deletion skipped (table may not exist)');
                 }
                 
                 // Delete medicine
                 const { error } = await supabase.from('medicines').delete().eq('id', medicineId);
                 if (error) {
-                    console.error('Medicine delete error:', error);
+                    addDebugLog('Medicine delete error', error);
                     throw error;
                 }
                 
-                console.log('Medicine delete successful');
+                addDebugLog('Medicine delete successful');
                 
                 // Update local data
                 medicines = medicines.filter(m => m.id !== medicineId);
@@ -2064,7 +2230,7 @@
                 
                 return true;
             } catch (error) {
-                console.error('Error deleting medicine:', error);
+                handleError(error, 'การลบยา');
                 throw error;
             } finally {
                 showLoading(false);
@@ -2073,7 +2239,7 @@
 
         async function saveMedicineHistory(historyData) {
             try {
-                console.log('Saving medicine history:', historyData);
+                addDebugLog('Saving medicine history', historyData);
                 const { data, error } = await supabase
                     .from('medicine_history')
                     .insert([{
@@ -2090,23 +2256,23 @@
                     .select();
                 
                 if (error) {
-                    console.error('History save error:', error);
+                    addDebugLog('History save error', error);
                     throw error;
                 }
                 
-                console.log('History save successful:', data);
+                addDebugLog('History save successful', data);
                 medicineHistory.unshift(data[0]);
                 
                 return true;
             } catch (error) {
-                console.error('Error saving medicine history:', error);
+                handleError(error, 'การบันทึกประวัติการใช้ยา');
                 throw error;
             }
         }
 
         async function saveSideEffect(sideEffectData) {
             try {
-                console.log('Saving side effect:', sideEffectData);
+                addDebugLog('Saving side effect', sideEffectData);
                 const { data, error } = await supabase
                     .from('side_effects')
                     .insert([{
@@ -2122,23 +2288,23 @@
                     .select();
                 
                 if (error) {
-                    console.error('Side effect save error:', error);
+                    addDebugLog('Side effect save error', error);
                     throw error;
                 }
                 
-                console.log('Side effect save successful:', data);
+                addDebugLog('Side effect save successful', data);
                 sideEffects.unshift(data[0]);
                 
                 return true;
             } catch (error) {
-                console.error('Error saving side effect:', error);
+                handleError(error, 'การบันทึกอาการข้างเคียง');
                 throw error;
             }
         }
 
         async function updateMedicineQuantity(medicineId, newQuantity) {
             try {
-                console.log('Updating medicine quantity:', medicineId, newQuantity);
+                addDebugLog('Updating medicine quantity', { medicineId, newQuantity });
                 const { data, error } = await supabase
                     .from('medicines')
                     .update({ 
@@ -2149,11 +2315,11 @@
                     .select();
                 
                 if (error) {
-                    console.error('Quantity update error:', error);
+                    addDebugLog('Quantity update error', error);
                     throw error;
                 }
                 
-                console.log('Quantity update successful:', data);
+                addDebugLog('Quantity update successful', data);
                 
                 // Update local data
                 const index = medicines.findIndex(m => m.id === medicineId);
@@ -2163,7 +2329,7 @@
                 
                 return true;
             } catch (error) {
-                console.error('Error updating medicine quantity:', error);
+                handleError(error, 'การอัปเดตจำนวนยา');
                 throw error;
             }
         }
@@ -2407,7 +2573,7 @@
 
         // Initialize System
         document.addEventListener('DOMContentLoaded', async function() {
-            console.log('Initializing system...');
+            addDebugLog('Initializing system...');
             
             // Check if Supabase is configured
             if (SUPABASE_URL.includes('YOUR_SUPABASE_URL') || SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY')) {
@@ -2432,9 +2598,14 @@
                 showAlert('ไม่สามารถเชื่อมต่อฐานข้อมูลได้', 'danger');
             }
             
-            document.getElementById('studentForm').addEventListener('submit', handleSaveStudent);
-            document.getElementById('medicineForm').addEventListener('submit', handleSaveMedicine);
-            document.getElementById('sideEffectForm').addEventListener('submit', handleSaveSideEffect);
+            // Add event listeners with error handling
+            try {
+                document.getElementById('studentForm').addEventListener('submit', handleSaveStudent);
+                document.getElementById('medicineForm').addEventListener('submit', handleSaveMedicine);
+                document.getElementById('sideEffectForm').addEventListener('submit', handleSaveSideEffect);
+            } catch (error) {
+                handleError(error, 'การเพิ่ม event listeners');
+            }
         });
 
         // Tab Management
@@ -2479,8 +2650,7 @@
                     showAlert(`เปลี่ยนสถานะ ${student.first_name} ${student.last_name} เป็น "${statusText}" เรียบร้อยแล้ว`, 'success');
                 }
             } catch (error) {
-                console.error('Toggle status error:', error);
-                showAlert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะ', 'danger');
+                handleError(error, 'การเปลี่ยนสถานะนักเรียน');
             }
         }
 
@@ -2502,7 +2672,7 @@
                         .neq('student_id', 'dummy'); // Update all records
                     
                     if (error) {
-                        console.error('Bulk update error:', error);
+                        addDebugLog('Bulk update error', error);
                         throw error;
                     }
                     
@@ -2518,8 +2688,7 @@
                     showAlert(`เปลี่ยนสถานะนักเรียนทั้งหมดเป็น "${statusText}" เรียบร้อยแล้ว`, 'success');
                 }
             } catch (error) {
-                console.error('Bulk update status error:', error);
-                showAlert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะ', 'danger');
+                handleError(error, 'การเปลี่ยนสถานะแบบกลุ่ม');
             } finally {
                 showLoading(false);
             }
@@ -2531,16 +2700,25 @@
             
             try {
                 const studentData = {
-                    id: document.getElementById('studentId').value,
-                    room: document.getElementById('studentRoom').value,
-                    firstName: document.getElementById('studentFirstName').value,
-                    lastName: document.getElementById('studentLastName').value,
+                    id: document.getElementById('studentId').value.trim(),
+                    room: document.getElementById('studentRoom').value.trim(),
+                    firstName: document.getElementById('studentFirstName').value.trim(),
+                    lastName: document.getElementById('studentLastName').value.trim(),
                     age: parseInt(document.getElementById('studentAge').value),
-                    parentPhone: document.getElementById('parentPhone').value,
-                    allergies: document.getElementById('allergies').value,
+                    parentPhone: document.getElementById('parentPhone').value.trim(),
+                    allergies: document.getElementById('allergies').value.trim(),
                     status: document.getElementById('studentStatus').value,
-                    notes: document.getElementById('studentNotes').value
+                    notes: document.getElementById('studentNotes').value.trim()
                 };
+
+                // Validation
+                if (!studentData.id || !studentData.room || !studentData.firstName || !studentData.lastName || !studentData.age) {
+                    throw new Error('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
+                }
+
+                if (studentData.age < 10 || studentData.age > 25) {
+                    throw new Error('อายุต้องอยู่ระหว่าง 10-25 ปี');
+                }
 
                 await saveStudent(studentData, currentEditingStudent !== null);
                 
@@ -2556,8 +2734,7 @@
                 closeStudentModal();
                 
             } catch (error) {
-                console.error('Save student error:', error);
-                showAlert(error.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'danger');
+                handleError(error, 'การบันทึกข้อมูลนักเรียน');
             }
         }
 
@@ -2568,11 +2745,17 @@
 
             if (studentId) {
                 const student = students.find(s => s.student_id === studentId);
+                if (!student) {
+                    showAlert('ไม่พบข้อมูลนักเรียน', 'danger');
+                    return;
+                }
+                
                 currentEditingStudent = studentId;
                 title.textContent = 'แก้ไขข้อมูลนักเรียน';
                 submitBtn.textContent = 'อัปเดต';
                 
                 document.getElementById('studentId').value = student.student_id;
+                document.getElementById('studentId').readOnly = true; // Don't allow editing student ID
                 document.getElementById('studentRoom').value = student.room;
                 document.getElementById('studentFirstName').value = student.first_name;
                 document.getElementById('studentLastName').value = student.last_name;
@@ -2586,6 +2769,8 @@
                 title.textContent = 'เพิ่มนักเรียนใหม่';
                 submitBtn.textContent = 'บันทึก';
                 document.getElementById('studentForm').reset();
+                document.getElementById('studentId').readOnly = false;
+                document.getElementById('studentStatus').value = 'boarding'; // Default status
             }
 
             modal.style.display = 'block';
@@ -2594,11 +2779,18 @@
         function closeStudentModal() {
             document.getElementById('studentModal').style.display = 'none';
             document.getElementById('studentForm').reset();
+            document.getElementById('studentId').readOnly = false;
             currentEditingStudent = null;
         }
 
         async function deleteStudent(studentId) {
-            if (confirm('คุณแน่ใจหรือไม่ที่จะลบนักเรียนคนนี้?\n(ข้อมูลยาทั้งหมดจะถูกลบด้วย)')) {
+            const student = students.find(s => s.student_id === studentId);
+            if (!student) {
+                showAlert('ไม่พบข้อมูลนักเรียน', 'danger');
+                return;
+            }
+
+            if (confirm(`คุณแน่ใจหรือไม่ที่จะลบนักเรียน "${student.first_name} ${student.last_name}"?\n\n⚠️ ข้อมูลยาและประวัติทั้งหมดจะถูกลบด้วย\n\nการกระทำนี้ไม่สามารถย้อนกลับได้`)) {
                 try {
                     await deleteStudentFromDB(studentId);
                     
@@ -2612,10 +2804,9 @@
                         loadStudentMedicines();
                     }
                     
-                    showAlert('ลบนักเรียนเรียบร้อยแล้ว', 'success');
+                    showAlert(`ลบนักเรียน ${student.first_name} ${student.last_name} เรียบร้อยแล้ว`, 'success');
                 } catch (error) {
-                    console.error('Delete student error:', error);
-                    showAlert('เกิดข้อผิดพลาดในการลบข้อมูล', 'danger');
+                    handleError(error, 'การลบนักเรียน');
                 }
             }
         }
@@ -2891,7 +3082,7 @@
                         <div class="medicine-details">
                             <div class="info-item">
                                 <span class="info-label">วันหมดอายุ</span>
-                                <span class="info-value">${medicine.expiry_date || 'ไม่ระบุ'}</span>
+                                <span class="info-value">${medicine.expiry_date ? new Date(medicine.expiry_date).toLocaleDateString('th-TH') : 'ไม่ระบุ'}</span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">เวลาให้ยา</span>
@@ -3032,14 +3223,19 @@
             const submitBtn = document.getElementById('medicineSubmitBtn');
 
             if (medicineId) {
-                const medicine = medicines.find(m => m.id === medicineId);
+                const medicine = medicines.find(m => m.id == medicineId);
+                if (!medicine) {
+                    showAlert('ไม่พบข้อมูลยา', 'danger');
+                    return;
+                }
+                
                 currentEditingMedicine = medicineId;
                 title.textContent = 'แก้ไขข้อมูลยา';
                 submitBtn.textContent = 'อัปเดต';
                 
-                document.getElementById('medicineName').value = medicine.name;
-                document.getElementById('medicineQuantity').value = medicine.current_quantity;
-                document.getElementById('medicineUnit').value = medicine.unit;
+                document.getElementById('medicineName').value = medicine.name || '';
+                document.getElementById('medicineQuantity').value = medicine.current_quantity || 0;
+                document.getElementById('medicineUnit').value = medicine.unit || '';
                 document.getElementById('medicineExpiry').value = medicine.expiry_date || '';
                 document.getElementById('medicineMinStock').value = medicine.min_stock_alert || ALERT_CONFIG.LOW_STOCK_THRESHOLD;
                 document.getElementById('medicineCriticalStock').value = medicine.critical_stock_alert || ALERT_CONFIG.CRITICAL_STOCK_THRESHOLD;
@@ -3071,28 +3267,57 @@
             event.preventDefault();
             
             try {
+                // Validate form data
+                const name = document.getElementById('medicineName').value.trim();
+                const quantity = document.getElementById('medicineQuantity').value;
+                const unit = document.getElementById('medicineUnit').value;
+                
+                if (!name || !quantity || !unit) {
+                    throw new Error('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน (ชื่อยา, จำนวน, หน่วย)');
+                }
+
+                if (parseFloat(quantity) < 0) {
+                    throw new Error('จำนวนยาต้องไม่ติดลบ');
+                }
+
                 const dosages = [];
                 const dosageRows = document.querySelectorAll('.dosage-row');
                 dosageRows.forEach(row => {
                     const time = row.querySelector('.dosage-time').value;
                     const amount = row.querySelector('.dosage-amount').value;
                     if (time && amount) {
+                        if (parseFloat(amount) < 0) {
+                            throw new Error('จำนวนยาในการให้ยาต้องไม่ติดลบ');
+                        }
                         dosages.push({ time, amount: parseFloat(amount) });
                     }
                 });
 
+                const expiryDate = document.getElementById('medicineExpiry').value;
+                if (expiryDate) {
+                    const expiry = new Date(expiryDate);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    
+                    if (expiry < today) {
+                        if (!confirm('วันหมดอายุที่ระบุเป็นวันที่ผ่านมาแล้ว คุณต้องการบันทึกต่อหรือไม่?')) {
+                            return;
+                        }
+                    }
+                }
+
                 const medicineData = {
                     id: currentEditingMedicine,
                     studentId: currentStudentId,
-                    name: document.getElementById('medicineName').value,
-                    currentQuantity: parseFloat(document.getElementById('medicineQuantity').value),
-                    unit: document.getElementById('medicineUnit').value,
-                    expiryDate: document.getElementById('medicineExpiry').value,
-                    minStockAlert: parseFloat(document.getElementById('medicineMinStock').value),
-                    criticalStockAlert: parseFloat(document.getElementById('medicineCriticalStock').value),
+                    name: name,
+                    currentQuantity: parseFloat(quantity),
+                    unit: unit,
+                    expiryDate: expiryDate || null,
+                    minStockAlert: parseFloat(document.getElementById('medicineMinStock').value) || ALERT_CONFIG.LOW_STOCK_THRESHOLD,
+                    criticalStockAlert: parseFloat(document.getElementById('medicineCriticalStock').value) || ALERT_CONFIG.CRITICAL_STOCK_THRESHOLD,
                     dosages: dosages,
-                    instructions: document.getElementById('medicineInstructions').value,
-                    notes: document.getElementById('medicineNotes').value
+                    instructions: document.getElementById('medicineInstructions').value.trim(),
+                    notes: document.getElementById('medicineNotes').value.trim()
                 };
 
                 await saveMedicine(medicineData, currentEditingMedicine !== null);
@@ -3109,22 +3334,26 @@
                 closeMedicineModal();
                 
             } catch (error) {
-                console.error('Save medicine error:', error);
-                showAlert('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'danger');
+                handleError(error, 'การบันทึกข้อมูลยา');
             }
         }
 
         async function deleteMedicine(medicineId) {
-            if (confirm('คุณแน่ใจหรือไม่ที่จะลบยานี้?')) {
+            const medicine = medicines.find(m => m.id == medicineId);
+            if (!medicine) {
+                showAlert('ไม่พบข้อมูลยา', 'danger');
+                return;
+            }
+
+            if (confirm(`คุณแน่ใจหรือไม่ที่จะลบยา "${medicine.name}"?\n\n⚠️ ประวัติการใช้ยาและอาการข้างเคียงจะถูกลบด้วย\n\nการกระทำนี้ไม่สามารถย้อนกลับได้`)) {
                 try {
                     await deleteMedicineFromDB(medicineId);
                     loadDashboard();
                     loadStudents();
                     loadStudentMedicines();
-                    showAlert('ลบยาเรียบร้อยแล้ว', 'success');
+                    showAlert(`ลบยา ${medicine.name} เรียบร้อยแล้ว`, 'success');
                 } catch (error) {
-                    console.error('Delete medicine error:', error);
-                    showAlert('เกิดข้อผิดพลาดในการลบข้อมูล', 'danger');
+                    handleError(error, 'การลบยา');
                 }
             }
         }
@@ -3133,6 +3362,12 @@
         function openSideEffectModal() {
             if (!currentStudentId) {
                 showAlert('กรุณาเลือกนักเรียนก่อน', 'danger');
+                return;
+            }
+
+            const studentMedicines = medicines.filter(m => m.student_id === currentStudentId);
+            if (studentMedicines.length === 0) {
+                showAlert('นักเรียนคนนี้ยังไม่มียาในระบบ', 'warning');
                 return;
             }
 
@@ -3152,18 +3387,30 @@
             
             try {
                 const medicineId = document.getElementById('sideEffectMedicine').value;
-                const medicine = medicines.find(m => m.id === medicineId);
+                const symptoms = document.getElementById('sideEffectSymptoms').value.trim();
+                const severity = document.getElementById('sideEffectSeverity').value;
+                const dateOccurred = document.getElementById('sideEffectDate').value;
+
+                if (!medicineId || !symptoms || !severity || !dateOccurred) {
+                    throw new Error('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
+                }
+
+                const medicine = medicines.find(m => m.id == medicineId);
                 const student = students.find(s => s.student_id === currentStudentId);
+
+                if (!medicine || !student) {
+                    throw new Error('ไม่พบข้อมูลยาหรือนักเรียน');
+                }
 
                 const sideEffectData = {
                     studentId: currentStudentId,
                     medicineId: medicineId,
                     medicineName: medicine.name,
                     studentName: `${student.first_name} ${student.last_name}`,
-                    symptoms: document.getElementById('sideEffectSymptoms').value,
-                    severity: document.getElementById('sideEffectSeverity').value,
-                    dateOccurred: document.getElementById('sideEffectDate').value,
-                    actionTaken: document.getElementById('sideEffectAction').value
+                    symptoms: symptoms,
+                    severity: severity,
+                    dateOccurred: dateOccurred,
+                    actionTaken: document.getElementById('sideEffectAction').value.trim()
                 };
 
                 await saveSideEffect(sideEffectData);
@@ -3175,8 +3422,7 @@
                 closeSideEffectModal();
                 
             } catch (error) {
-                console.error('Save side effect error:', error);
-                showAlert('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'danger');
+                handleError(error, 'การบันทึกอาการข้างเคียง');
             }
         }
 
@@ -3194,7 +3440,12 @@
         }
 
         function removeDosageRow(button) {
-            button.parentElement.remove();
+            const container = document.getElementById('dosageContainer');
+            if (container.children.length > 1) {
+                button.parentElement.remove();
+            } else {
+                showAlert('ต้องมีเวลาให้ยาอย่างน้อย 1 ครั้ง', 'warning');
+            }
         }
 
         function resetDosages() {
@@ -3231,41 +3482,52 @@
 
         // Auto Dispense System
         function startAutoDispenseSystem() {
-            autoDispenseInterval = setInterval(checkAutoDispense, 60000);
-            checkAutoDispense();
-            console.log('Auto dispense system started');
+            // Clear existing interval if any
+            if (autoDispenseInterval) {
+                clearInterval(autoDispenseInterval);
+            }
+            
+            autoDispenseInterval = setInterval(checkAutoDispense, 60000); // Check every minute
+            checkAutoDispense(); // Check immediately
+            addDebugLog('Auto dispense system started');
         }
 
         async function checkAutoDispense() {
-            const now = new Date();
-            const currentTime = now.toTimeString().slice(0, 5);
-            const currentDate = now.toDateString();
+            try {
+                const now = new Date();
+                const currentTime = now.toTimeString().slice(0, 5);
+                const currentDate = now.toDateString();
 
-            const boardingStudents = students.filter(s => (s.status || 'boarding') === 'boarding');
-            console.log(`Checking auto dispense at ${currentTime} for ${boardingStudents.length} boarding students`);
-            
-            for (const student of boardingStudents) {
-                const studentMedicines = medicines.filter(m => m.student_id === student.student_id);
+                const boardingStudents = students.filter(s => (s.status || 'boarding') === 'boarding');
+                addDebugLog(`Checking auto dispense at ${currentTime} for ${boardingStudents.length} boarding students`);
                 
-                for (const medicine of studentMedicines) {
-                    if (medicine.dosages && medicine.dosages.length > 0) {
-                        for (const dosage of medicine.dosages) {
-                            if (dosage.time === currentTime) {
-                                const todayHistory = medicineHistory.filter(h => 
-                                    h.medicine_id === medicine.id && 
-                                    h.student_id === student.student_id &&
-                                    h.date === currentDate &&
-                                    h.time === currentTime
-                                );
+                for (const student of boardingStudents) {
+                    const studentMedicines = medicines.filter(m => m.student_id === student.student_id);
+                    
+                    for (const medicine of studentMedicines) {
+                        if (medicine.dosages && medicine.dosages.length > 0) {
+                            for (const dosage of medicine.dosages) {
+                                if (dosage.time === currentTime) {
+                                    // Check if already dispensed today at this time
+                                    const todayHistory = medicineHistory.filter(h => 
+                                        h.medicine_id == medicine.id && 
+                                        h.student_id === student.student_id &&
+                                        h.date === currentDate &&
+                                        h.time === currentTime &&
+                                        h.type === 'auto'
+                                    );
 
-                                if (todayHistory.length === 0) {
-                                    console.log(`Auto dispensing: ${medicine.name} for ${student.first_name} ${student.last_name}`);
-                                    await autoDispenseMedicine(medicine, student, dosage);
+                                    if (todayHistory.length === 0) {
+                                        addDebugLog(`Auto dispensing: ${medicine.name} for ${student.first_name} ${student.last_name}`);
+                                        await autoDispenseMedicine(medicine, student, dosage);
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            } catch (error) {
+                handleError(error, 'ระบบหักยาอัตโนมัติ');
             }
         }
 
@@ -3289,37 +3551,50 @@
                     
                     await saveMedicineHistory(historyData);
 
+                    // Refresh UI if current student is displayed
                     if (currentStudentId === student.student_id) {
                         loadStudentMedicines();
                     }
 
-                    console.log(`หักยาอัตโนมัติ: ${medicine.name} จำนวน ${dosage.amount} ${medicine.unit} ให้ ${student.first_name} ${student.last_name} เวลา ${dosage.time}`);
+                    addDebugLog(`Auto dispensed: ${medicine.name} ${dosage.amount} ${medicine.unit} to ${student.first_name} ${student.last_name} at ${dosage.time}`);
                 } else {
-                    showAlert(`ยา ${medicine.name} ของ ${student.first_name} ${student.last_name} ไม่เพียงพอสำหรับหักอัตโนมัติ`, 'danger');
+                    const message = `ยา ${medicine.name} ของ ${student.first_name} ${student.last_name} ไม่เพียงพอสำหรับหักอัตโนมัติ (เหลือ ${medicine.current_quantity} ${medicine.unit}, ต้องการ ${dosage.amount} ${medicine.unit})`;
+                    addDebugLog(message);
+                    showAlert(message, 'warning');
                 }
             } catch (error) {
-                console.error('Error in auto dispense:', error);
+                handleError(error, 'การหักยาอัตโนมัติ');
             }
         }
 
         async function dispenseMedicine(medicineId) {
             try {
-                const medicine = medicines.find(m => m.id === medicineId);
+                const medicine = medicines.find(m => m.id == medicineId);
                 const student = students.find(s => s.student_id === medicine.student_id);
+                
+                if (!medicine || !student) {
+                    showAlert('ไม่พบข้อมูลยาหรือนักเรียน', 'danger');
+                    return;
+                }
                 
                 const amount = prompt(`หักยา ${medicine.name}\nคงเหลือ: ${medicine.current_quantity} ${medicine.unit}\n\nระบุจำนวนที่ต้องการหัก:`, '1');
                 
-                if (amount === null) return;
+                if (amount === null) return; // User cancelled
                 
                 const dispensedAmount = parseFloat(amount);
                 
                 if (isNaN(dispensedAmount) || dispensedAmount <= 0) {
-                    showAlert('กรุณาระบุจำนวนที่ถูกต้อง', 'danger');
+                    showAlert('กรุณาระบุจำนวนที่ถูกต้อง (ต้องเป็นตัวเลขมากกว่า 0)', 'danger');
                     return;
                 }
                 
                 if (dispensedAmount > medicine.current_quantity) {
-                    showAlert('จำนวนยาไม่เพียงพอ', 'danger');
+                    showAlert(`จำนวนยาไม่เพียงพอ (เหลือ ${medicine.current_quantity} ${medicine.unit})`, 'danger');
+                    return;
+                }
+
+                // Confirm the action
+                if (!confirm(`ยืนยันการหักยา ${medicine.name}\nจำนวน: ${dispensedAmount} ${medicine.unit}\nให้กับ: ${student.first_name} ${student.last_name}`)) {
                     return;
                 }
 
@@ -3346,8 +3621,7 @@
                 showAlert(`หักยา ${medicine.name} จำนวน ${dispensedAmount} ${medicine.unit} เรียบร้อยแล้ว`, 'success');
                 
             } catch (error) {
-                console.error('Dispense medicine error:', error);
-                showAlert('เกิดข้อผิดพลาดในการหักยา', 'danger');
+                handleError(error, 'การหักยา');
             }
         }
 
@@ -3480,7 +3754,7 @@
                         <td>${medicine.name}</td>
                         <td>${medicine.current_quantity}</td>
                         <td>${medicine.unit}</td>
-                        <td>${medicine.expiry_date || '-'}</td>
+                        <td>${medicine.expiry_date ? new Date(medicine.expiry_date).toLocaleDateString('th-TH') : '-'}</td>
                         <td style="color: ${statusColor};">${statusText}</td>
                     </tr>
                 `;
@@ -3626,67 +3900,81 @@
         }
 
         function exportStudentData() {
-            const csvData = [];
-            csvData.push(['รหัสนักเรียน', 'ชื่อ', 'นามสกุล', 'ห้อง', 'อายุ', 'สถานะ', 'เบอร์ผู้ปกครอง', 'ประวัติแพ้ยา', 'จำนวนยา']);
-            
-            students.forEach(student => {
-                const medicineCount = medicines.filter(m => m.student_id === student.student_id).length;
-                const status = student.status === 'boarding' ? 'อยู่โรงเรียน' : 'กลับบ้าน';
+            try {
+                const csvData = [];
+                csvData.push(['รหัสนักเรียน', 'ชื่อ', 'นามสกุล', 'ห้อง', 'อายุ', 'สถานะ', 'เบอร์ผู้ปกครอง', 'ประวัติแพ้ยา', 'จำนวนยา']);
                 
-                csvData.push([
-                    student.student_id,
-                    student.first_name,
-                    student.last_name,
-                    student.room,
-                    student.age,
-                    status,
-                    student.parent_phone || '',
-                    student.allergies || '',
-                    medicineCount
-                ]);
-            });
+                students.forEach(student => {
+                    const medicineCount = medicines.filter(m => m.student_id === student.student_id).length;
+                    const status = student.status === 'boarding' ? 'อยู่โรงเรียน' : 'กลับบ้าน';
+                    
+                    csvData.push([
+                        student.student_id,
+                        student.first_name,
+                        student.last_name,
+                        student.room,
+                        student.age,
+                        status,
+                        student.parent_phone || '',
+                        student.allergies || '',
+                        medicineCount
+                    ]);
+                });
 
-            downloadCSV(csvData, 'student_data.csv');
+                downloadCSV(csvData, 'student_data.csv');
+                showAlert('ส่งออกข้อมูลนักเรียนเรียบร้อยแล้ว', 'success');
+            } catch (error) {
+                handleError(error, 'การส่งออกข้อมูลนักเรียน');
+            }
         }
 
         function exportAllReports() {
-            // Export medicines
-            const medicineData = [];
-            medicineData.push(['นักเรียน', 'ชื่อยา', 'จำนวนคงเหลือ', 'หน่วย', 'วันหมดอายุ', 'วิธีใช้', 'หมายเหตุ']);
-            
-            medicines.forEach(medicine => {
-                const student = students.find(s => s.student_id === medicine.student_id);
-                medicineData.push([
-                    student ? `${student.first_name} ${student.last_name}` : 'ไม่พบข้อมูล',
-                    medicine.name,
-                    medicine.current_quantity,
-                    medicine.unit,
-                    medicine.expiry_date || '',
-                    medicine.instructions || '',
-                    medicine.notes || ''
-                ]);
-            });
+            try {
+                // Export medicines
+                const medicineData = [];
+                medicineData.push(['นักเรียน', 'ชื่อยา', 'จำนวนคงเหลือ', 'หน่วย', 'วันหมดอายุ', 'วิธีใช้', 'หมายเหตุ']);
+                
+                medicines.forEach(medicine => {
+                    const student = students.find(s => s.student_id === medicine.student_id);
+                    medicineData.push([
+                        student ? `${student.first_name} ${student.last_name}` : 'ไม่พบข้อมูล',
+                        medicine.name,
+                        medicine.current_quantity,
+                        medicine.unit,
+                        medicine.expiry_date ? new Date(medicine.expiry_date).toLocaleDateString('th-TH') : '',
+                        medicine.instructions || '',
+                        medicine.notes || ''
+                    ]);
+                });
 
-            downloadCSV(medicineData, 'medicine_report.csv');
-            showAlert('ส่งออกรายงานเรียบร้อยแล้ว', 'success');
+                downloadCSV(medicineData, 'medicine_report.csv');
+                showAlert('ส่งออกรายงานเรียบร้อยแล้ว', 'success');
+            } catch (error) {
+                handleError(error, 'การส่งออกรายงาน');
+            }
         }
 
         function downloadCSV(data, filename) {
-            const csvContent = data.map(row => 
-                row.map(field => `"${field}"`).join(',')
-            ).join('\n');
-            
-            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            
-            if (link.download !== undefined) {
-                const url = URL.createObjectURL(blob);
-                link.setAttribute('href', url);
-                link.setAttribute('download', filename);
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+            try {
+                const csvContent = data.map(row => 
+                    row.map(field => `"${field}"`).join(',')
+                ).join('\n');
+                
+                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                
+                if (link.download !== undefined) {
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', filename);
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                }
+            } catch (error) {
+                handleError(error, 'การดาวน์โหลดไฟล์');
             }
         }
 
@@ -3704,8 +3992,7 @@
                 }
                 showAlert('ซิงค์ข้อมูลเรียบร้อยแล้ว', 'success');
             } catch (error) {
-                console.error('Sync data error:', error);
-                showAlert('เกิดข้อผิดพลาดในการซิงค์ข้อมูล', 'danger');
+                handleError(error, 'การซิงค์ข้อมูล');
             } finally {
                 showLoading(false);
             }
@@ -3720,6 +4007,7 @@
             alert.style.right = '20px';
             alert.style.zIndex = '9999';
             alert.style.minWidth = '300px';
+            alert.style.maxWidth = '500px';
             alert.style.boxShadow = '0 8px 30px rgba(0,0,0,0.3)';
 
             document.body.appendChild(alert);
@@ -3728,7 +4016,7 @@
                 if (alert.parentNode) {
                     alert.parentNode.removeChild(alert);
                 }
-            }, 3000);
+            }, 5000);
         }
 
         // Event Listeners
@@ -3737,6 +4025,7 @@
             const medicineModal = document.getElementById('medicineModal');
             const historyModal = document.getElementById('medicineHistoryModal');
             const sideEffectModal = document.getElementById('sideEffectModal');
+            const debugModal = document.getElementById('debugModal');
             
             if (event.target === studentModal) {
                 closeStudentModal();
@@ -3750,17 +4039,25 @@
             if (event.target === sideEffectModal) {
                 closeSideEffectModal();
             }
+            if (event.target === debugModal) {
+                closeDebugModal();
+            }
         });
 
         // Global error handling
         window.addEventListener('error', function(event) {
-            console.error('Global error:', event.error);
-            showAlert('เกิดข้อผิดพลาดในระบบ', 'danger');
+            handleError(event.error, 'JavaScript Error');
         });
 
         window.addEventListener('unhandledrejection', function(event) {
-            console.error('Unhandled promise rejection:', event.reason);
-            showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล', 'danger');
+            handleError(event.reason, 'Unhandled Promise Rejection');
+        });
+
+        // Prevent form submission on Enter key for number inputs
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' && event.target.type === 'number') {
+                event.preventDefault();
+            }
         });
     </script>
 </body>
