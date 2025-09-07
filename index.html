@@ -3237,8 +3237,8 @@
                 document.getElementById('medicineQuantity').value = medicine.current_quantity || 0;
                 document.getElementById('medicineUnit').value = medicine.unit || '';
                 document.getElementById('medicineExpiry').value = medicine.expiry_date || '';
-                document.getElementById('medicineMinStock').value = medicine.min_stock_alert || ALERT_CONFIG.LOW_STOCK_THRESHOLD;
-                document.getElementById('medicineCriticalStock').value = medicine.critical_stock_alert || ALERT_CONFIG.CRITICAL_STOCK_THRESHOLD;
+                document.getElementById('medicineMinStock').value = medicine.min_stock_alert ?? ALERT_CONFIG.LOW_STOCK_THRESHOLD;
+                document.getElementById('medicineCriticalStock').value = medicine.critical_stock_alert ?? ALERT_CONFIG.CRITICAL_STOCK_THRESHOLD;
                 document.getElementById('medicineInstructions').value = medicine.instructions || '';
                 document.getElementById('medicineNotes').value = medicine.notes || '';
 
