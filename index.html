@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบจัดการยานักเรียนประจำ</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
         
@@ -233,6 +234,12 @@
         .btn-secondary:hover {
             background: #475569;
             transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
         }
 
         /* Search Box */
@@ -707,6 +714,43 @@
             font-size: 0.9rem;
         }
 
+        /* Loading Indicator */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+
+        .loading-content {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         /* Responsive Design */
         @media (max-width: 768px) {
             .app-container {
@@ -812,9 +856,10 @@
             <div id="students-tab" class="tab-content active">
                 <div class="section-header">
                     <h2 class="section-title">รายชื่อนักเรียน</h2>
-                    <button class="btn btn-primary" onclick="openStudentModal()">
-                        เพิ่มนักเรียนใหม่
-                    </button>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <button class="btn btn-success" onclick="syncData()">ซิงค์ข้อมูล</button>
+                        <button class="btn btn-primary" onclick="openStudentModal()">เพิ่มนักเรียนใหม่</button>
+                    </div>
                 </div>
 
                 <div class="search-container">
@@ -1024,6 +1069,13 @@
     </div>
 
     <script>
+        // Supabase Configuration
+        const SUPABASE_URL = 'https://dafonmeissfrrovkuyxv.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhZm9ubWVpc3NmcnJvdmt1eXh2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxNjkxNjQsImV4cCI6MjA3Mjc0NTE2NH0.qyIUTVnwER0Q2OqLNJXUVzTVu2qmaLCgdn42f4Q3iS8';
+        
+        // Initialize Supabase client
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
         // Global Variables
         let students = [];
         let medicines = [];
@@ -1032,54 +1084,436 @@
         let currentEditingMedicine = null;
         let currentStudentId = null;
         let autoDispenseInterval = null;
+        let isLoading = false;
 
-        // Initialize System
-        document.addEventListener('DOMContentLoaded', function() {
-            loadStudents();
-            updateStudentSelect();
-            startAutoDispenseSystem();
+        // Loading Management
+        function showLoading(show) {
+            isLoading = show;
+            let loadingOverlay = document.getElementById('loadingOverlay');
             
-            document.getElementById('studentForm').addEventListener('submit', saveStudent);
-            document.getElementById('medicineForm').addEventListener('submit', saveMedicine);
-        });
+            if (show) {
+                if (!loadingOverlay) {
+                    loadingOverlay = document.createElement('div');
+                    loadingOverlay.id = 'loadingOverlay';
+                    loadingOverlay.className = 'loading-overlay';
+                    loadingOverlay.innerHTML = `
+                        <div class="loading-content">
+                            <div class="loading-spinner"></div>
+                            <p>กำลังโหลด...</p>
+                        </div>
+                    `;
+                    document.body.appendChild(loadingOverlay);
+                }
+                loadingOverlay.style.display = 'flex';
+            } else {
+                if (loadingOverlay) {
+                    loadingOverlay.style.display = 'none';
+                }
+            }
+            
+            // Disable buttons during loading
+            const buttons = document.querySelectorAll('button, input[type="submit"]');
+            buttons.forEach(btn => {
+                btn.disabled = show;
+            });
+        }
 
-        // Utility Functions
-        async function syncData() {
+        // Database Functions
+        async function testConnection() {
+            try {
+                console.log('Testing Supabase connection...');
+                const { data, error } = await supabase.from('students').select('count', { count: 'exact' });
+                if (error) {
+                    console.error('Connection test failed:', error);
+                    showAlert('การเชื่อมต่อฐานข้อมูลล้มเหลว: ' + error.message, 'danger');
+                    return false;
+                } else {
+                    console.log('Connection successful, student count:', data);
+                    return true;
+                }
+            } catch (err) {
+                console.error('Connection error:', err);
+                showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message, 'danger');
+                return false;
+            }
+        }
+
+        async function initDatabase() {
             try {
                 showLoading(true);
+                
+                // Test connection first
+                const connected = await testConnection();
+                if (!connected) return false;
+                
                 await loadFromDatabase();
-                loadStudents();
-                updateStudentSelect();
-                if (currentStudentId) {
-                    loadStudentMedicines();
-                }
-                showAlert('ซิงค์ข้อมูลเรียบร้อยแล้ว', 'success');
+                showAlert('โหลดข้อมูลเรียบร้อยแล้ว', 'success');
+                return true;
             } catch (error) {
-                showAlert('เกิดข้อผิดพลาดในการซิงค์ข้อมูล', 'danger');
+                console.error('Database initialization error:', error);
+                showAlert('เกิดข้อผิดพลาดในการเริ่มต้นฐานข้อมูล: ' + error.message, 'danger');
+                return false;
             } finally {
                 showLoading(false);
             }
         }
 
-        function showAlert(message, type) {
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.textContent = message;
-            alert.style.position = 'fixed';
-            alert.style.top = '20px';
-            alert.style.right = '20px';
-            alert.style.zIndex = '9999';
-            alert.style.minWidth = '300px';
-            alert.style.boxShadow = '0 8px 30px rgba(0,0,0,0.3)';
-
-            document.body.appendChild(alert);
-
-            setTimeout(() => {
-                if (alert.parentNode) {
-                    alert.parentNode.removeChild(alert);
+        async function loadFromDatabase() {
+            try {
+                console.log('Loading data from database...');
+                
+                // Load students
+                const { data: studentsData, error: studentsError } = await supabase
+                    .from('students')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (studentsError) {
+                    console.error('Students load error:', studentsError);
+                    throw studentsError;
                 }
-            }, 3000);
+                students = studentsData || [];
+                console.log('Loaded students:', students.length);
+
+                // Load medicines
+                const { data: medicinesData, error: medicinesError } = await supabase
+                    .from('medicines')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (medicinesError) {
+                    console.error('Medicines load error:', medicinesError);
+                    throw medicinesError;
+                }
+                medicines = medicinesData || [];
+                console.log('Loaded medicines:', medicines.length);
+
+                // Load medicine history
+                const { data: historyData, error: historyError } = await supabase
+                    .from('medicine_history')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (historyError) {
+                    console.error('History load error:', historyError);
+                    throw historyError;
+                }
+                medicineHistory = historyData || [];
+                console.log('Loaded history:', medicineHistory.length);
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                throw error;
+            }
         }
+
+        async function saveStudent(studentData, isUpdate = false) {
+            try {
+                showLoading(true);
+                console.log('Saving student:', studentData, 'isUpdate:', isUpdate);
+                
+                if (isUpdate) {
+                    console.log('Updating student with ID:', studentData.id);
+                    const { data, error } = await supabase
+                        .from('students')
+                        .update({
+                            room: studentData.room,
+                            first_name: studentData.firstName,
+                            last_name: studentData.lastName,
+                            age: studentData.age,
+                            parent_phone: studentData.parentPhone,
+                            allergies: studentData.allergies,
+                            status: studentData.status,
+                            notes: studentData.notes,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('student_id', studentData.id)
+                        .select();
+                    
+                    if (error) {
+                        console.error('Update error:', error);
+                        throw error;
+                    }
+                    
+                    console.log('Update successful:', data);
+                    
+                    // Update local data
+                    const index = students.findIndex(s => s.student_id === studentData.id);
+                    if (index !== -1) {
+                        students[index] = data[0];
+                    }
+                } else {
+                    // Check if student ID already exists
+                    console.log('Checking if student exists:', studentData.id);
+                    const { data: existingStudent, error: checkError } = await supabase
+                        .from('students')
+                        .select('student_id')
+                        .eq('student_id', studentData.id)
+                        .single();
+                    
+                    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows found
+                        console.error('Check error:', checkError);
+                        throw checkError;
+                    }
+                    
+                    if (existingStudent) {
+                        console.log('Student already exists');
+                        throw new Error('รหัสนักเรียนนี้มีอยู่แล้ว');
+                    }
+                    
+                    console.log('Inserting new student');
+                    const { data, error } = await supabase
+                        .from('students')
+                        .insert([{
+                            student_id: studentData.id,
+                            room: studentData.room,
+                            first_name: studentData.firstName,
+                            last_name: studentData.lastName,
+                            age: studentData.age,
+                            parent_phone: studentData.parentPhone,
+                            allergies: studentData.allergies,
+                            status: studentData.status,
+                            notes: studentData.notes
+                        }])
+                        .select();
+                    
+                    if (error) {
+                        console.error('Insert error:', error);
+                        throw error;
+                    }
+                    
+                    console.log('Insert successful:', data);
+                    students.unshift(data[0]);
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Error saving student:', error);
+                throw error;
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function deleteStudentFromDB(studentId) {
+            try {
+                showLoading(true);
+                console.log('Deleting student:', studentId);
+                
+                // Delete related medicines first
+                await supabase.from('medicines').delete().eq('student_id', studentId);
+                
+                // Delete related history
+                await supabase.from('medicine_history').delete().eq('student_id', studentId);
+                
+                // Delete student
+                const { error } = await supabase.from('students').delete().eq('student_id', studentId);
+                if (error) {
+                    console.error('Delete error:', error);
+                    throw error;
+                }
+                
+                console.log('Delete successful');
+                
+                // Update local data
+                students = students.filter(s => s.student_id !== studentId);
+                medicines = medicines.filter(m => m.student_id !== studentId);
+                medicineHistory = medicineHistory.filter(h => h.student_id !== studentId);
+                
+                return true;
+            } catch (error) {
+                console.error('Error deleting student:', error);
+                throw error;
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function saveMedicine(medicineData, isUpdate = false) {
+            try {
+                showLoading(true);
+                console.log('Saving medicine:', medicineData, 'isUpdate:', isUpdate);
+                
+                if (isUpdate) {
+                    const { data, error } = await supabase
+                        .from('medicines')
+                        .update({
+                            name: medicineData.name,
+                            current_quantity: medicineData.currentQuantity,
+                            unit: medicineData.unit,
+                            expiry_date: medicineData.expiryDate,
+                            dosages: medicineData.dosages,
+                            instructions: medicineData.instructions,
+                            notes: medicineData.notes,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', medicineData.id)
+                        .select();
+                    
+                    if (error) {
+                        console.error('Medicine update error:', error);
+                        throw error;
+                    }
+                    
+                    console.log('Medicine update successful:', data);
+                    
+                    // Update local data
+                    const index = medicines.findIndex(m => m.id === medicineData.id);
+                    if (index !== -1) {
+                        medicines[index] = data[0];
+                    }
+                } else {
+                    const { data, error } = await supabase
+                        .from('medicines')
+                        .insert([{
+                            student_id: medicineData.studentId,
+                            name: medicineData.name,
+                            current_quantity: medicineData.currentQuantity,
+                            unit: medicineData.unit,
+                            expiry_date: medicineData.expiryDate,
+                            dosages: medicineData.dosages,
+                            instructions: medicineData.instructions,
+                            notes: medicineData.notes
+                        }])
+                        .select();
+                    
+                    if (error) {
+                        console.error('Medicine insert error:', error);
+                        throw error;
+                    }
+                    
+                    console.log('Medicine insert successful:', data);
+                    medicines.unshift(data[0]);
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Error saving medicine:', error);
+                throw error;
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function deleteMedicineFromDB(medicineId) {
+            try {
+                showLoading(true);
+                console.log('Deleting medicine:', medicineId);
+                
+                // Delete related history
+                await supabase.from('medicine_history').delete().eq('medicine_id', medicineId);
+                
+                // Delete medicine
+                const { error } = await supabase.from('medicines').delete().eq('id', medicineId);
+                if (error) {
+                    console.error('Medicine delete error:', error);
+                    throw error;
+                }
+                
+                console.log('Medicine delete successful');
+                
+                // Update local data
+                medicines = medicines.filter(m => m.id !== medicineId);
+                medicineHistory = medicineHistory.filter(h => h.medicine_id !== medicineId);
+                
+                return true;
+            } catch (error) {
+                console.error('Error deleting medicine:', error);
+                throw error;
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function saveMedicineHistory(historyData) {
+            try {
+                console.log('Saving medicine history:', historyData);
+                const { data, error } = await supabase
+                    .from('medicine_history')
+                    .insert([{
+                        medicine_id: historyData.medicineId,
+                        student_id: historyData.studentId,
+                        medicine_name: historyData.medicineName,
+                        student_name: historyData.studentName,
+                        amount: historyData.amount,
+                        unit: historyData.unit,
+                        time: historyData.time,
+                        date: historyData.date,
+                        type: historyData.type
+                    }])
+                    .select();
+                
+                if (error) {
+                    console.error('History save error:', error);
+                    throw error;
+                }
+                
+                console.log('History save successful:', data);
+                medicineHistory.unshift(data[0]);
+                
+                return true;
+            } catch (error) {
+                console.error('Error saving medicine history:', error);
+                throw error;
+            }
+        }
+
+        async function updateMedicineQuantity(medicineId, newQuantity) {
+            try {
+                console.log('Updating medicine quantity:', medicineId, newQuantity);
+                const { data, error } = await supabase
+                    .from('medicines')
+                    .update({ 
+                        current_quantity: newQuantity,
+                        updated_at: new Date().toISOString() 
+                    })
+                    .eq('id', medicineId)
+                    .select();
+                
+                if (error) {
+                    console.error('Quantity update error:', error);
+                    throw error;
+                }
+                
+                console.log('Quantity update successful:', data);
+                
+                // Update local data
+                const index = medicines.findIndex(m => m.id === medicineId);
+                if (index !== -1) {
+                    medicines[index] = data[0];
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Error updating medicine quantity:', error);
+                throw error;
+            }
+        }
+
+        // Initialize System
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('Initializing system...');
+            
+            // Check if Supabase is configured
+            if (SUPABASE_URL.includes('YOUR_SUPABASE_URL') || SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY')) {
+                showAlert('กรุณาตั้งค่า Supabase URL และ API Key ในโค้ด', 'danger');
+                return;
+            }
+            
+            // Initialize database
+            const dbInitialized = await initDatabase();
+            if (dbInitialized) {
+                loadStudents();
+                updateStudentSelect();
+                startAutoDispenseSystem();
+                showAlert('เชื่อมต่อฐานข้อมูลเรียบร้อยแล้ว', 'success');
+            } else {
+                showAlert('ไม่สามารถเชื่อมต่อฐานข้อมูลได้', 'danger');
+            }
+            
+            document.getElementById('studentForm').addEventListener('submit', handleSaveStudent);
+            document.getElementById('medicineForm').addEventListener('submit', handleSaveMedicine);
+        });
 
         // Tab Management
         function showTab(tabName) {
@@ -1095,23 +1529,57 @@
         }
 
         // Student Management
+        async function handleSaveStudent(event) {
+            event.preventDefault();
+            
+            try {
+                const studentData = {
+                    id: document.getElementById('studentId').value,
+                    room: document.getElementById('studentRoom').value,
+                    firstName: document.getElementById('studentFirstName').value,
+                    lastName: document.getElementById('studentLastName').value,
+                    age: parseInt(document.getElementById('studentAge').value),
+                    parentPhone: document.getElementById('parentPhone').value,
+                    allergies: document.getElementById('allergies').value,
+                    status: document.getElementById('studentStatus').value,
+                    notes: document.getElementById('studentNotes').value
+                };
+
+                await saveStudent(studentData, currentEditingStudent !== null);
+                
+                if (currentEditingStudent) {
+                    showAlert('อัปเดตข้อมูลนักเรียนเรียบร้อยแล้ว', 'success');
+                } else {
+                    showAlert('เพิ่มนักเรียนใหม่เรียบร้อยแล้ว', 'success');
+                }
+
+                loadStudents();
+                updateStudentSelect();
+                closeStudentModal();
+                
+            } catch (error) {
+                console.error('Save student error:', error);
+                showAlert(error.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'danger');
+            }
+        }
+
         function openStudentModal(studentId = null) {
             const modal = document.getElementById('studentModal');
             const title = document.getElementById('studentModalTitle');
             const submitBtn = document.getElementById('studentSubmitBtn');
 
             if (studentId) {
-                const student = students.find(s => s.id === studentId);
+                const student = students.find(s => s.student_id === studentId);
                 currentEditingStudent = studentId;
                 title.textContent = 'แก้ไขข้อมูลนักเรียน';
                 submitBtn.textContent = 'อัปเดต';
                 
-                document.getElementById('studentId').value = student.id;
+                document.getElementById('studentId').value = student.student_id;
                 document.getElementById('studentRoom').value = student.room;
-                document.getElementById('studentFirstName').value = student.firstName;
-                document.getElementById('studentLastName').value = student.lastName;
+                document.getElementById('studentFirstName').value = student.first_name;
+                document.getElementById('studentLastName').value = student.last_name;
                 document.getElementById('studentAge').value = student.age;
-                document.getElementById('parentPhone').value = student.parentPhone || '';
+                document.getElementById('parentPhone').value = student.parent_phone || '';
                 document.getElementById('allergies').value = student.allergies || '';
                 document.getElementById('studentStatus').value = student.status || 'boarding';
                 document.getElementById('studentNotes').value = student.notes || '';
@@ -1131,58 +1599,25 @@
             currentEditingStudent = null;
         }
 
-        function saveStudent(event) {
-            event.preventDefault();
-            
-            const studentData = {
-                id: document.getElementById('studentId').value,
-                room: document.getElementById('studentRoom').value,
-                firstName: document.getElementById('studentFirstName').value,
-                lastName: document.getElementById('studentLastName').value,
-                age: parseInt(document.getElementById('studentAge').value),
-                parentPhone: document.getElementById('parentPhone').value,
-                allergies: document.getElementById('allergies').value,
-                status: document.getElementById('studentStatus').value,
-                notes: document.getElementById('studentNotes').value,
-                createdAt: currentEditingStudent ? 
-                    students.find(s => s.id === currentEditingStudent).createdAt : 
-                    new Date().toISOString()
-            };
-
-            if (currentEditingStudent) {
-                const index = students.findIndex(s => s.id === currentEditingStudent);
-                students[index] = studentData;
-                showAlert('อัปเดตข้อมูลนักเรียนเรียบร้อยแล้ว', 'success');
-            } else {
-                if (students.find(s => s.id === studentData.id)) {
-                    showAlert('รหัสนักเรียนนี้มีอยู่แล้ว', 'danger');
-                    return;
-                }
-                students.push(studentData);
-                showAlert('เพิ่มนักเรียนใหม่เรียบร้อยแล้ว', 'success');
-            }
-
-            loadStudents();
-            updateStudentSelect();
-            closeStudentModal();
-        }
-
-        function deleteStudent(studentId) {
+        async function deleteStudent(studentId) {
             if (confirm('คุณแน่ใจหรือไม่ที่จะลบนักเรียนคนนี้?\n(ข้อมูลยาทั้งหมดจะถูกลบด้วย)')) {
-                students = students.filter(s => s.id !== studentId);
-                medicines = medicines.filter(m => m.studentId !== studentId);
-                medicineHistory = medicineHistory.filter(h => h.studentId !== studentId);
-                
-                loadStudents();
-                updateStudentSelect();
-                
-                if (currentStudentId === studentId) {
-                    currentStudentId = null;
-                    document.getElementById('studentSelect').value = '';
-                    loadStudentMedicines();
+                try {
+                    await deleteStudentFromDB(studentId);
+                    
+                    loadStudents();
+                    updateStudentSelect();
+                    
+                    if (currentStudentId === studentId) {
+                        currentStudentId = null;
+                        document.getElementById('studentSelect').value = '';
+                        loadStudentMedicines();
+                    }
+                    
+                    showAlert('ลบนักเรียนเรียบร้อยแล้ว', 'success');
+                } catch (error) {
+                    console.error('Delete student error:', error);
+                    showAlert('เกิดข้อผิดพลาดในการลบข้อมูล', 'danger');
                 }
-                
-                showAlert('ลบนักเรียนเรียบร้อยแล้ว', 'success');
             }
         }
 
@@ -1202,7 +1637,7 @@
 
             let html = '';
             students.forEach(student => {
-                const studentMedicines = medicines.filter(m => m.studentId === student.id);
+                const studentMedicines = medicines.filter(m => m.student_id === student.student_id);
                 const medicineCount = studentMedicines.length;
                 const statusClass = student.status === 'boarding' ? 'status-boarding' : 'status-home';
                 const statusText = student.status === 'boarding' ? 'อยู่ประจำ' : 'กลับบ้าน';
@@ -1211,8 +1646,8 @@
                     <div class="student-card">
                         <div class="student-header">
                             <div>
-                                <div class="student-name">${student.firstName} ${student.lastName}</div>
-                                <div class="student-id">รหัส: ${student.id}</div>
+                                <div class="student-name">${student.first_name} ${student.last_name}</div>
+                                <div class="student-id">รหัส: ${student.student_id}</div>
                             </div>
                             <div class="student-status ${statusClass}">${statusText}</div>
                         </div>
@@ -1237,10 +1672,10 @@
                         </div>
 
                         <div class="student-actions">
-                            <button class="btn btn-warning" onclick="openStudentModal('${student.id}')">
+                            <button class="btn btn-warning" onclick="openStudentModal('${student.student_id}')">
                                 แก้ไข
                             </button>
-                            <button class="btn btn-danger" onclick="deleteStudent('${student.id}')">
+                            <button class="btn btn-danger" onclick="deleteStudent('${student.student_id}')">
                                 ลบ
                             </button>
                         </div>
@@ -1268,8 +1703,8 @@
 
             students.forEach(student => {
                 const option = document.createElement('option');
-                option.value = student.id;
-                option.textContent = `${student.firstName} ${student.lastName} (${student.room})`;
+                option.value = student.student_id;
+                option.textContent = `${student.first_name} ${student.last_name} (${student.room})`;
                 select.appendChild(option);
             });
         }
@@ -1298,14 +1733,14 @@
             addBtn.disabled = false;
             historyBtn.disabled = false;
             
-            const student = students.find(s => s.id === studentId);
-            const studentMedicines = medicines.filter(m => m.studentId === studentId);
+            const student = students.find(s => s.student_id === studentId);
+            const studentMedicines = medicines.filter(m => m.student_id === studentId);
 
             if (studentMedicines.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">💊</div>
-                        <h3>ยังไม่มียาสำหรับ ${student.firstName} ${student.lastName}</h3>
+                        <h3>ยังไม่มียาสำหรับ ${student.first_name} ${student.last_name}</h3>
                         <p>เริ่มต้นด้วยการเพิ่มยาชนิดแรก</p>
                     </div>
                 `;
@@ -1314,8 +1749,8 @@
 
             let html = '';
             studentMedicines.forEach(medicine => {
-                const quantityClass = getQuantityStatusClass(medicine.currentQuantity);
-                const quantityText = getQuantityStatusText(medicine.currentQuantity);
+                const quantityClass = getQuantityStatusClass(medicine.current_quantity);
+                const quantityText = getQuantityStatusText(medicine.current_quantity);
                 const dosageText = medicine.dosages && medicine.dosages.length > 0 ? 
                     medicine.dosages.map(d => `${d.time} (${d.amount} ${medicine.unit})`).join(', ') : 
                     'ไม่ระบุ';
@@ -1326,7 +1761,7 @@
                             <div>
                                 <div class="medicine-name">${medicine.name}</div>
                                 <div class="medicine-quantity">
-                                    <strong>${medicine.currentQuantity} ${medicine.unit}</strong>
+                                    <strong>${medicine.current_quantity} ${medicine.unit}</strong>
                                     <span class="quantity-badge ${quantityClass}">${quantityText}</span>
                                 </div>
                             </div>
@@ -1346,7 +1781,7 @@
                         <div class="medicine-details">
                             <div class="info-item">
                                 <span class="info-label">วันหมดอายุ</span>
-                                <span class="info-value">${medicine.expiryDate || 'ไม่ระบุ'}</span>
+                                <span class="info-value">${medicine.expiry_date || 'ไม่ระบุ'}</span>
                             </div>
                             <div class="info-item">
                                 <span class="info-label">เวลาให้ยา</span>
@@ -1395,9 +1830,9 @@
                 submitBtn.textContent = 'อัปเดต';
                 
                 document.getElementById('medicineName').value = medicine.name;
-                document.getElementById('medicineQuantity').value = medicine.currentQuantity;
+                document.getElementById('medicineQuantity').value = medicine.current_quantity;
                 document.getElementById('medicineUnit').value = medicine.unit;
-                document.getElementById('medicineExpiry').value = medicine.expiryDate || '';
+                document.getElementById('medicineExpiry').value = medicine.expiry_date || '';
                 document.getElementById('medicineInstructions').value = medicine.instructions || '';
                 document.getElementById('medicineNotes').value = medicine.notes || '';
 
@@ -1420,53 +1855,59 @@
             resetDosages();
         }
 
-        function saveMedicine(event) {
+        async function handleSaveMedicine(event) {
             event.preventDefault();
             
-            const dosages = [];
-            const dosageRows = document.querySelectorAll('.dosage-row');
-            dosageRows.forEach(row => {
-                const time = row.querySelector('.dosage-time').value;
-                const amount = row.querySelector('.dosage-amount').value;
-                if (time && amount) {
-                    dosages.push({ time, amount: parseFloat(amount) });
+            try {
+                const dosages = [];
+                const dosageRows = document.querySelectorAll('.dosage-row');
+                dosageRows.forEach(row => {
+                    const time = row.querySelector('.dosage-time').value;
+                    const amount = row.querySelector('.dosage-amount').value;
+                    if (time && amount) {
+                        dosages.push({ time, amount: parseFloat(amount) });
+                    }
+                });
+
+                const medicineData = {
+                    id: currentEditingMedicine,
+                    studentId: currentStudentId,
+                    name: document.getElementById('medicineName').value,
+                    currentQuantity: parseFloat(document.getElementById('medicineQuantity').value),
+                    unit: document.getElementById('medicineUnit').value,
+                    expiryDate: document.getElementById('medicineExpiry').value,
+                    dosages: dosages,
+                    instructions: document.getElementById('medicineInstructions').value,
+                    notes: document.getElementById('medicineNotes').value
+                };
+
+                await saveMedicine(medicineData, currentEditingMedicine !== null);
+                
+                if (currentEditingMedicine) {
+                    showAlert('อัปเดตข้อมูลยาเรียบร้อยแล้ว', 'success');
+                } else {
+                    showAlert('เพิ่มยาใหม่เรียบร้อยแล้ว', 'success');
                 }
-            });
 
-            const medicineData = {
-                id: currentEditingMedicine || 'med_' + Date.now(),
-                studentId: currentStudentId,
-                name: document.getElementById('medicineName').value,
-                currentQuantity: parseFloat(document.getElementById('medicineQuantity').value),
-                unit: document.getElementById('medicineUnit').value,
-                expiryDate: document.getElementById('medicineExpiry').value,
-                dosages: dosages,
-                instructions: document.getElementById('medicineInstructions').value,
-                notes: document.getElementById('medicineNotes').value,
-                createdAt: currentEditingMedicine ? 
-                    medicines.find(m => m.id === currentEditingMedicine).createdAt : 
-                    new Date().toISOString()
-            };
-
-            if (currentEditingMedicine) {
-                const index = medicines.findIndex(m => m.id === currentEditingMedicine);
-                medicines[index] = medicineData;
-                showAlert('อัปเดตข้อมูลยาเรียบร้อยแล้ว', 'success');
-            } else {
-                medicines.push(medicineData);
-                showAlert('เพิ่มยาใหม่เรียบร้อยแล้ว', 'success');
+                loadStudentMedicines();
+                closeMedicineModal();
+                
+            } catch (error) {
+                console.error('Save medicine error:', error);
+                showAlert('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'danger');
             }
-
-            loadStudentMedicines();
-            closeMedicineModal();
         }
 
-        function deleteMedicine(medicineId) {
+        async function deleteMedicine(medicineId) {
             if (confirm('คุณแน่ใจหรือไม่ที่จะลบยานี้?')) {
-                medicines = medicines.filter(m => m.id !== medicineId);
-                medicineHistory = medicineHistory.filter(h => h.medicineId !== medicineId);
-                loadStudentMedicines();
-                showAlert('ลบยาเรียบร้อยแล้ว', 'success');
+                try {
+                    await deleteMedicineFromDB(medicineId);
+                    loadStudentMedicines();
+                    showAlert('ลบยาเรียบร้อยแล้ว', 'success');
+                } catch (error) {
+                    console.error('Delete medicine error:', error);
+                    showAlert('เกิดข้อผิดพลาดในการลบข้อมูล', 'danger');
+                }
             }
         }
 
@@ -1523,118 +1964,120 @@
         function startAutoDispenseSystem() {
             autoDispenseInterval = setInterval(checkAutoDispense, 60000);
             checkAutoDispense();
+            console.log('Auto dispense system started');
         }
 
-        function checkAutoDispense() {
+        async function checkAutoDispense() {
             const now = new Date();
             const currentTime = now.toTimeString().slice(0, 5);
             const currentDate = now.toDateString();
 
             const boardingStudents = students.filter(s => s.status === 'boarding');
+            console.log(`Checking auto dispense at ${currentTime} for ${boardingStudents.length} boarding students`);
             
-            boardingStudents.forEach(student => {
-                const studentMedicines = medicines.filter(m => m.studentId === student.id);
+            for (const student of boardingStudents) {
+                const studentMedicines = medicines.filter(m => m.student_id === student.student_id);
                 
-                studentMedicines.forEach(medicine => {
+                for (const medicine of studentMedicines) {
                     if (medicine.dosages && medicine.dosages.length > 0) {
-                        medicine.dosages.forEach(dosage => {
+                        for (const dosage of medicine.dosages) {
                             if (dosage.time === currentTime) {
                                 const todayHistory = medicineHistory.filter(h => 
-                                    h.medicineId === medicine.id && 
-                                    h.studentId === student.id &&
+                                    h.medicine_id === medicine.id && 
+                                    h.student_id === student.student_id &&
                                     h.date === currentDate &&
                                     h.time === currentTime
                                 );
 
                                 if (todayHistory.length === 0) {
-                                    autoDispenseMedicine(medicine, student, dosage);
+                                    console.log(`Auto dispensing: ${medicine.name} for ${student.first_name} ${student.last_name}`);
+                                    await autoDispenseMedicine(medicine, student, dosage);
                                 }
                             }
-                        });
+                        }
                     }
-                });
-            });
+                }
+            }
         }
 
-        function autoDispenseMedicine(medicine, student, dosage) {
-            if (medicine.currentQuantity >= dosage.amount) {
-                medicine.currentQuantity -= dosage.amount;
-                
-                const historyRecord = {
-                    id: 'hist_' + Date.now(),
-                    medicineId: medicine.id,
-                    studentId: student.id,
-                    medicineName: medicine.name,
-                    studentName: `${student.firstName} ${student.lastName}`,
-                    amount: dosage.amount,
-                    unit: medicine.unit,
-                    time: dosage.time,
-                    date: new Date().toDateString(),
-                    type: 'auto',
-                    timestamp: new Date().toISOString()
-                };
-                
-                medicineHistory.push(historyRecord);
+        async function autoDispenseMedicine(medicine, student, dosage) {
+            try {
+                if (medicine.current_quantity >= dosage.amount) {
+                    const newQuantity = medicine.current_quantity - dosage.amount;
+                    await updateMedicineQuantity(medicine.id, newQuantity);
+                    
+                    const historyData = {
+                        medicineId: medicine.id,
+                        studentId: student.student_id,
+                        medicineName: medicine.name,
+                        studentName: `${student.first_name} ${student.last_name}`,
+                        amount: dosage.amount,
+                        unit: medicine.unit,
+                        time: dosage.time,
+                        date: new Date().toDateString(),
+                        type: 'auto'
+                    };
+                    
+                    await saveMedicineHistory(historyData);
 
-                const medicineIndex = medicines.findIndex(m => m.id === medicine.id);
-                medicines[medicineIndex] = medicine;
-                saveToStorage(); // บันทึกข้อมูลลง localStorage
+                    if (currentStudentId === student.student_id) {
+                        loadStudentMedicines();
+                    }
 
-                if (currentStudentId === student.id) {
-                    loadStudentMedicines();
+                    console.log(`หักยาอัตโนมัติ: ${medicine.name} จำนวน ${dosage.amount} ${medicine.unit} ให้ ${student.first_name} ${student.last_name} เวลา ${dosage.time}`);
+                } else {
+                    showAlert(`ยา ${medicine.name} ของ ${student.first_name} ${student.last_name} ไม่เพียงพอสำหรับหักอัตโนมัติ`, 'danger');
+                }
+            } catch (error) {
+                console.error('Error in auto dispense:', error);
+            }
+        }
+
+        async function dispenseMedicine(medicineId) {
+            try {
+                const medicine = medicines.find(m => m.id === medicineId);
+                const student = students.find(s => s.student_id === medicine.student_id);
+                
+                const amount = prompt(`หักยา ${medicine.name}\nคงเหลือ: ${medicine.current_quantity} ${medicine.unit}\n\nระบุจำนวนที่ต้องการหัก:`, '1');
+                
+                if (amount === null) return;
+                
+                const dispensedAmount = parseFloat(amount);
+                
+                if (isNaN(dispensedAmount) || dispensedAmount <= 0) {
+                    showAlert('กรุณาระบุจำนวนที่ถูกต้อง', 'danger');
+                    return;
+                }
+                
+                if (dispensedAmount > medicine.current_quantity) {
+                    showAlert('จำนวนยาไม่เพียงพอ', 'danger');
+                    return;
                 }
 
-                console.log(`หักยาอัตโนมัติ: ${medicine.name} จำนวน ${dosage.amount} ${medicine.unit} ให้ ${student.firstName} ${student.lastName} เวลา ${dosage.time}`);
-            } else {
-                showAlert(`ยา ${medicine.name} ของ ${student.firstName} ${student.lastName} ไม่เพียงพอสำหรับหักอัตโนมัติ`, 'danger');
+                const newQuantity = medicine.current_quantity - dispensedAmount;
+                await updateMedicineQuantity(medicineId, newQuantity);
+                
+                const now = new Date();
+                const historyData = {
+                    medicineId: medicine.id,
+                    studentId: student.student_id,
+                    medicineName: medicine.name,
+                    studentName: `${student.first_name} ${student.last_name}`,
+                    amount: dispensedAmount,
+                    unit: medicine.unit,
+                    time: now.toTimeString().slice(0, 5),
+                    date: now.toDateString(),
+                    type: 'manual'
+                };
+                
+                await saveMedicineHistory(historyData);
+                loadStudentMedicines();
+                showAlert(`หักยา ${medicine.name} จำนวน ${dispensedAmount} ${medicine.unit} เรียบร้อยแล้ว`, 'success');
+                
+            } catch (error) {
+                console.error('Dispense medicine error:', error);
+                showAlert('เกิดข้อผิดพลาดในการหักยา', 'danger');
             }
-        }
-
-        function dispenseMedicine(medicineId) {
-            const medicine = medicines.find(m => m.id === medicineId);
-            const student = students.find(s => s.id === medicine.studentId);
-            
-            const amount = prompt(`หักยา ${medicine.name}\nคงเหลือ: ${medicine.currentQuantity} ${medicine.unit}\n\nระบุจำนวนที่ต้องการหัก:`, '1');
-            
-            if (amount === null) return;
-            
-            const dispensedAmount = parseFloat(amount);
-            
-            if (isNaN(dispensedAmount) || dispensedAmount <= 0) {
-                showAlert('กรุณาระบุจำนวนที่ถูกต้อง', 'danger');
-                return;
-            }
-            
-            if (dispensedAmount > medicine.currentQuantity) {
-                showAlert('จำนวนยาไม่เพียงพอ', 'danger');
-                return;
-            }
-
-            medicine.currentQuantity -= dispensedAmount;
-            
-            const now = new Date();
-            const historyRecord = {
-                id: 'hist_' + Date.now(),
-                medicineId: medicine.id,
-                studentId: student.id,
-                medicineName: medicine.name,
-                studentName: `${student.firstName} ${student.lastName}`,
-                amount: dispensedAmount,
-                unit: medicine.unit,
-                time: now.toTimeString().slice(0, 5),
-                date: now.toDateString(),
-                type: 'manual',
-                timestamp: now.toISOString()
-            };
-            
-            medicineHistory.push(historyRecord);
-
-            const medicineIndex = medicines.findIndex(m => m.id === medicineId);
-            medicines[medicineIndex] = medicine;
-
-            saveToStorage(); // บันทึกข้อมูลลง localStorage
-            loadStudentMedicines();
-            showAlert(`หักยา ${medicine.name} จำนวน ${dispensedAmount} ${medicine.unit} เรียบร้อยแล้ว`, 'success');
         }
 
         // History Management
@@ -1648,11 +2091,11 @@
             const title = document.getElementById('historyModalTitle');
             const container = document.getElementById('historyContainer');
             
-            const student = students.find(s => s.id === currentStudentId);
-            title.textContent = `ประวัติการใช้ยา - ${student.firstName} ${student.lastName}`;
+            const student = students.find(s => s.student_id === currentStudentId);
+            title.textContent = `ประวัติการใช้ยา - ${student.first_name} ${student.last_name}`;
             
-            const studentHistory = medicineHistory.filter(h => h.studentId === currentStudentId)
-                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            const studentHistory = medicineHistory.filter(h => h.student_id === currentStudentId)
+                .sort((a, b) => new Date(b.created_at || b.timestamp) - new Date(a.created_at || a.timestamp));
 
             if (studentHistory.length === 0) {
                 container.innerHTML = `
@@ -1679,12 +2122,12 @@
                     groupedHistory[date].forEach(record => {
                         const typeClass = record.type === 'auto' ? 'history-auto' : 'history-manual';
                         const typeLabel = record.type === 'auto' ? 'อัตโนมัติ' : 'หักด้วยตนเอง';
-                        const timeStr = new Date(record.timestamp).toLocaleTimeString('th-TH');
+                        const timeStr = new Date(record.created_at || record.timestamp).toLocaleTimeString('th-TH');
                         
                         html += `
                             <div class="history-item ${typeClass}">
                                 <div class="history-header">
-                                    <span class="history-medicine">${record.medicineName}</span>
+                                    <span class="history-medicine">${record.medicine_name}</span>
                                     <span class="history-time">${timeStr}</span>
                                 </div>
                                 <div class="history-details">
@@ -1706,6 +2149,24 @@
         }
 
         // Utility Functions
+        async function syncData() {
+            try {
+                showLoading(true);
+                await loadFromDatabase();
+                loadStudents();
+                updateStudentSelect();
+                if (currentStudentId) {
+                    loadStudentMedicines();
+                }
+                showAlert('ซิงค์ข้อมูลเรียบร้อยแล้ว', 'success');
+            } catch (error) {
+                console.error('Sync data error:', error);
+                showAlert('เกิดข้อผิดพลาดในการซิงค์ข้อมูล', 'danger');
+            } finally {
+                showLoading(false);
+            }
+        }
+
         function showAlert(message, type) {
             const alert = document.createElement('div');
             alert.className = `alert alert-${type}`;
@@ -1741,6 +2202,17 @@
             if (event.target === historyModal) {
                 closeMedicineHistoryModal();
             }
+        });
+
+        // Global error handling
+        window.addEventListener('error', function(event) {
+            console.error('Global error:', event.error);
+            showAlert('เกิดข้อผิดพลาดในระบบ', 'danger');
+        });
+
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled promise rejection:', event.reason);
+            showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล', 'danger');
         });
     </script>
 </body>
