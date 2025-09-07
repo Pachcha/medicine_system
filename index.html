@@ -2192,6 +2192,7 @@
             const studentModal = document.getElementById('studentModal');
             const medicineModal = document.getElementById('medicineModal');
             const historyModal = document.getElementById('medicineHistoryModal');
+            const reportModal = document.getElementById('reportModal');
             
             if (event.target === studentModal) {
                 closeStudentModal();
@@ -2201,6 +2202,9 @@
             }
             if (event.target === historyModal) {
                 closeMedicineHistoryModal();
+            }
+            if (event.target === reportModal) {
+                closeReportModal();
             }
         });
 
