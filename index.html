@@ -130,6 +130,8 @@
             margin-bottom: 30px;
             padding-bottom: 20px;
             border-bottom: 2px solid #e2e8f0;
+            flex-wrap: wrap;
+            gap: 16px;
         }
 
         .section-title {
@@ -147,6 +149,21 @@
             height: 30px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 2px;
+        }
+
+        /* Bulk Action Buttons */
+        .bulk-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .bulk-actions .divider {
+            width: 2px;
+            height: 30px;
+            background: #e2e8f0;
+            margin: 0 8px;
         }
 
         /* Button Styles */
@@ -236,6 +253,53 @@
             transform: translateY(-2px);
         }
 
+        /* Status Toggle Buttons */
+        .btn-status-boarding {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-status-boarding:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-status-home {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(107, 114, 128, 0.3);
+        }
+
+        .btn-status-home:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(107, 114, 128, 0.4);
+        }
+
+        .btn-bulk-boarding {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+            font-weight: 600;
+        }
+
+        .btn-bulk-boarding:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-bulk-home {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(107, 114, 128, 0.3);
+            font-weight: 600;
+        }
+
+        .btn-bulk-home:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(107, 114, 128, 0.4);
+        }
+
         .btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
@@ -278,7 +342,7 @@
         /* Student Cards */
         .students-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
             gap: 20px;
         }
 
@@ -343,8 +407,8 @@
         }
 
         .status-home {
-            background: #fef3c7;
-            color: #92400e;
+            background: #f3f4f6;
+            color: #374151;
         }
 
         .student-info {
@@ -380,6 +444,14 @@
             margin-top: 16px;
             padding-top: 16px;
             border-top: 1px solid #e2e8f0;
+            flex-wrap: wrap;
+        }
+
+        .status-toggle-btn {
+            flex: 1;
+            min-width: 120px;
+            justify-content: center;
+            font-weight: 600;
         }
 
         /* Medicine Section */
@@ -775,6 +847,14 @@
                 align-items: stretch;
             }
 
+            .bulk-actions {
+                justify-content: center;
+            }
+
+            .bulk-actions .divider {
+                display: none;
+            }
+
             .form-row {
                 grid-template-columns: 1fr;
             }
@@ -811,6 +891,10 @@
 
             .student-actions {
                 justify-content: center;
+            }
+
+            .status-toggle-btn {
+                min-width: 100px;
             }
         }
 
@@ -856,7 +940,14 @@
             <div id="students-tab" class="tab-content active">
                 <div class="section-header">
                     <h2 class="section-title">รายชื่อนักเรียน</h2>
-                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div class="bulk-actions">
+                        <button class="btn btn-bulk-boarding" onclick="bulkUpdateStatus('boarding')">
+                            🏫 ทุกคนอยู่โรงเรียน
+                        </button>
+                        <button class="btn btn-bulk-home" onclick="bulkUpdateStatus('home')">
+                            🏠 ทุกคนกลับบ้าน
+                        </button>
+                        <div class="divider"></div>
                         <button class="btn btn-success" onclick="syncData()">ซิงค์ข้อมูล</button>
                         <button class="btn btn-primary" onclick="openStudentModal()">เพิ่มนักเรียนใหม่</button>
                     </div>
@@ -1295,6 +1386,39 @@
             }
         }
 
+        async function updateStudentStatus(studentId, newStatus) {
+            try {
+                console.log('Updating student status:', studentId, 'to', newStatus);
+                
+                const { data, error } = await supabase
+                    .from('students')
+                    .update({ 
+                        status: newStatus,
+                        updated_at: new Date().toISOString() 
+                    })
+                    .eq('student_id', studentId)
+                    .select();
+                
+                if (error) {
+                    console.error('Status update error:', error);
+                    throw error;
+                }
+                
+                console.log('Status update successful:', data);
+                
+                // Update local data
+                const index = students.findIndex(s => s.student_id === studentId);
+                if (index !== -1) {
+                    students[index] = data[0];
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Error updating student status:', error);
+                throw error;
+            }
+        }
+
         async function deleteStudentFromDB(studentId) {
             try {
                 showLoading(true);
@@ -1528,6 +1652,74 @@
             event.target.classList.add('active');
         }
 
+        // Status Management Functions
+        async function toggleStudentStatus(studentId) {
+            try {
+                const student = students.find(s => s.student_id === studentId);
+                if (!student) return;
+
+                const currentStatus = student.status || 'boarding';
+                const newStatus = currentStatus === 'boarding' ? 'home' : 'boarding';
+                const statusText = newStatus === 'boarding' ? 'อยู่โรงเรียน' : 'กลับบ้าน';
+                const actionText = newStatus === 'boarding' ? 'เปิดการหักยาอัตโนมัติ' : 'หยุดการหักยาอัตโนมัติ';
+
+                if (confirm(`เปลี่ยนสถานะของ ${student.first_name} ${student.last_name}\nจาก "${currentStatus === 'boarding' ? 'อยู่โรงเรียน' : 'กลับบ้าน'}" เป็น "${statusText}"\n\nการเปลี่ยนแปลงนี้จะ${actionText}\n\nคุณแน่ใจหรือไม่?`)) {
+                    
+                    await updateStudentStatus(studentId, newStatus);
+                    loadStudents();
+                    
+                    if (currentStudentId === studentId) {
+                        updateStudentSelect();
+                    }
+                    
+                    showAlert(`เปลี่ยนสถานะ ${student.first_name} ${student.last_name} เป็น "${statusText}" เรียบร้อยแล้ว`, 'success');
+                }
+            } catch (error) {
+                console.error('Toggle status error:', error);
+                showAlert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะ', 'danger');
+            }
+        }
+
+        async function bulkUpdateStatus(newStatus) {
+            try {
+                const statusText = newStatus === 'boarding' ? 'อยู่โรงเรียน' : 'กลับบ้าน';
+                const actionText = newStatus === 'boarding' ? 'เปิดการหักยาอัตโนมัติสำหรับทุกคน' : 'หยุดการหักยาอัตโนมัติสำหรับทุกคน';
+                
+                if (confirm(`เปลี่ยนสถานะนักเรียนทั้งหมด (${students.length} คน) เป็น "${statusText}"\n\nการเปลี่ยนแปลงนี้จะ${actionText}\n\nคุณแน่ใจหรือไม่?`)) {
+                    showLoading(true);
+                    
+                    // Update all students in database
+                    const { error } = await supabase
+                        .from('students')
+                        .update({ 
+                            status: newStatus,
+                            updated_at: new Date().toISOString() 
+                        })
+                        .neq('student_id', 'dummy'); // Update all records
+                    
+                    if (error) {
+                        console.error('Bulk update error:', error);
+                        throw error;
+                    }
+                    
+                    // Update local data
+                    students.forEach(student => {
+                        student.status = newStatus;
+                    });
+                    
+                    loadStudents();
+                    updateStudentSelect();
+                    
+                    showAlert(`เปลี่ยนสถานะนักเรียนทั้งหมดเป็น "${statusText}" เรียบร้อยแล้ว`, 'success');
+                }
+            } catch (error) {
+                console.error('Bulk update status error:', error);
+                showAlert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะ', 'danger');
+            } finally {
+                showLoading(false);
+            }
+        }
+
         // Student Management
         async function handleSaveStudent(event) {
             event.preventDefault();
@@ -1639,8 +1831,11 @@
             students.forEach(student => {
                 const studentMedicines = medicines.filter(m => m.student_id === student.student_id);
                 const medicineCount = studentMedicines.length;
-                const statusClass = student.status === 'boarding' ? 'status-boarding' : 'status-home';
-                const statusText = student.status === 'boarding' ? 'อยู่ประจำ' : 'กลับบ้าน';
+                const status = student.status || 'boarding';
+                const statusClass = status === 'boarding' ? 'status-boarding' : 'status-home';
+                const statusText = status === 'boarding' ? 'อยู่โรงเรียน' : 'กลับบ้าน';
+                const statusIcon = status === 'boarding' ? '🏫' : '🏠';
+                const statusBtnClass = status === 'boarding' ? 'btn-status-boarding' : 'btn-status-home';
                 
                 html += `
                     <div class="student-card">
@@ -1672,6 +1867,9 @@
                         </div>
 
                         <div class="student-actions">
+                            <button class="btn ${statusBtnClass} status-toggle-btn" onclick="toggleStudentStatus('${student.student_id}')">
+                                ${statusIcon} ${statusText}
+                            </button>
                             <button class="btn btn-warning" onclick="openStudentModal('${student.student_id}')">
                                 แก้ไข
                             </button>
@@ -1704,7 +1902,9 @@
             students.forEach(student => {
                 const option = document.createElement('option');
                 option.value = student.student_id;
-                option.textContent = `${student.first_name} ${student.last_name} (${student.room})`;
+                const status = student.status || 'boarding';
+                const statusIcon = status === 'boarding' ? '🏫' : '🏠';
+                option.textContent = `${statusIcon} ${student.first_name} ${student.last_name} (${student.room})`;
                 select.appendChild(option);
             });
         }
@@ -1737,10 +1937,15 @@
             const studentMedicines = medicines.filter(m => m.student_id === studentId);
 
             if (studentMedicines.length === 0) {
+                const status = student.status || 'boarding';
+                const statusIcon = status === 'boarding' ? '🏫' : '🏠';
+                const statusText = status === 'boarding' ? 'อยู่โรงเรียน' : 'กลับบ้าน';
+                
                 container.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">💊</div>
                         <h3>ยังไม่มียาสำหรับ ${student.first_name} ${student.last_name}</h3>
+                        <p>สถานะปัจจุบัน: ${statusIcon} ${statusText}</p>
                         <p>เริ่มต้นด้วยการเพิ่มยาชนิดแรก</p>
                     </div>
                 `;
@@ -1972,7 +2177,7 @@
             const currentTime = now.toTimeString().slice(0, 5);
             const currentDate = now.toDateString();
 
-            const boardingStudents = students.filter(s => s.status === 'boarding');
+            const boardingStudents = students.filter(s => (s.status || 'boarding') === 'boarding');
             console.log(`Checking auto dispense at ${currentTime} for ${boardingStudents.length} boarding students`);
             
             for (const student of boardingStudents) {
@@ -2192,7 +2397,6 @@
             const studentModal = document.getElementById('studentModal');
             const medicineModal = document.getElementById('medicineModal');
             const historyModal = document.getElementById('medicineHistoryModal');
-            const reportModal = document.getElementById('reportModal');
             
             if (event.target === studentModal) {
                 closeStudentModal();
@@ -2202,9 +2406,6 @@
             }
             if (event.target === historyModal) {
                 closeMedicineHistoryModal();
-            }
-            if (event.target === reportModal) {
-                closeReportModal();
             }
         });
 
