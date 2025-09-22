@@ -1334,10 +1334,10 @@
         <!-- Navigation -->
         <div class="nav-container">
             <div class="nav-tabs">
-                <button class="nav-tab active" onclick="showTab('dashboard')">📊 แดชบอร์ด</button>
-                <button class="nav-tab" onclick="showTab('students')">👨‍🎓 จัดการนักเรียน</button>
-                <button class="nav-tab" onclick="showTab('medicines')">💊 จัดการยานักเรียน</button>
-                <button class="nav-tab" onclick="showTab('reports')">📋 รายงาน</button>
+                <button class="nav-tab active" onclick="showTab('dashboard', event)">📊 แดชบอร์ด</button>
+                <button class="nav-tab" onclick="showTab('students', event)">👨‍🎓 จัดการนักเรียน</button>
+                <button class="nav-tab" onclick="showTab('medicines', event)">💊 จัดการยานักเรียน</button>
+                <button class="nav-tab" onclick="showTab('reports', event)">📋 รายงาน</button>
             </div>
         </div>
 
@@ -1831,17 +1831,26 @@
     </div>
 
     <script>
-        // Supabase Configuration
+        // Supabase Configuration - แก้ไข URL และ Key ให้ถูกต้อง
         const SUPABASE_URL = 'https://sgchxxsuflctvpnmihcc.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNnY2h4eHN1ZmxjdHZwbm1paGNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0NjA2MTYsImV4cCI6MjA3NDAzNjYxNn0.pH0SoX9lSivYJvtG3Oltys07rPzvLWbPnx3nEpPIz0Q';
         
-        // Initialize Supabase client
+        // Initialize Supabase client with better error handling
         let supabase;
         try {
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                auth: {
+                    persistSession: false,
+                    autoRefreshToken: false
+                },
+                db: {
+                    schema: 'public'
+                }
+            });
+            console.log('Supabase client initialized successfully');
         } catch (error) {
             console.error('Supabase initialization error:', error);
-            showAlert('ไม่สามารถเชื่อมต่อ Supabase ได้', 'danger');
+            alert('ไม่สามารถเชื่อมต่อ Supabase ได้: ' + error.message);
         }
         
         // Global Variables
@@ -1868,6 +1877,7 @@
 
         // Initialize System
         document.addEventListener('DOMContentLoaded', async function() {
+            console.log('Initializing system...');
             const dbInitialized = await initDatabase();
             if (dbInitialized) {
                 loadDashboard();
@@ -1877,11 +1887,15 @@
                 
                 // Set current date for forms
                 const today = new Date().toISOString().split('T')[0];
-                document.getElementById('sideEffectDate').value = today;
+                const sideEffectDateField = document.getElementById('sideEffectDate');
+                if (sideEffectDateField) {
+                    sideEffectDateField.value = today;
+                }
                 
                 showAlert('เชื่อมต่อฐานข้อมูลเรียบร้อยแล้ว', 'success');
             } else {
-                showAlert('ไม่สามารถเชื่อมต่อฐานข้อมูลได้', 'danger');
+                showAlert('ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาตรวจสอบการตั้งค่า', 'danger');
+                console.log('Database initialization failed. Please check console for details.');
             }
             
             // Add event listeners
@@ -1896,19 +1910,34 @@
         async function initDatabase() {
             try {
                 showLoading(true);
+                console.log('Testing database connection...');
                 
-                // Test connection
+                // Test connection with simple query
                 const { data, error } = await supabase
                     .from('students')
-                    .select('*', { count: 'exact', head: true });
+                    .select('*')
+                    .limit(1);
                     
-                if (error) throw error;
+                if (error) {
+                    console.error('Database connection error:', error);
+                    
+                    // Check if tables don't exist
+                    if (error.message && error.message.includes('does not exist')) {
+                        showAlert('ไม่พบตารางในฐานข้อมูล กรุณาสร้างตารางก่อนใช้งาน', 'danger');
+                        console.error('Tables not found. Please run the SQL script first.');
+                        return false;
+                    }
+                    
+                    throw error;
+                }
                 
+                console.log('Connection successful, loading data...');
                 await loadFromDatabase();
                 return true;
+                
             } catch (error) {
                 console.error('Database init error:', error);
-                showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล', 'danger');
+                showAlert('เกิดข้อผิดพลาด: ' + (error.message || 'Unknown error'), 'danger');
                 return false;
             } finally {
                 showLoading(false);
@@ -1917,6 +1946,8 @@
 
         async function loadFromDatabase() {
             try {
+                console.log('Loading data from database...');
+                
                 // Load students
                 const { data: studentsData, error: studentsError } = await supabase
                     .from('students')
@@ -1925,6 +1956,7 @@
                 
                 if (studentsError) throw studentsError;
                 students = studentsData || [];
+                console.log(`Loaded ${students.length} students`);
 
                 // Load medicines
                 const { data: medicinesData, error: medicinesError } = await supabase
@@ -1934,6 +1966,7 @@
                 
                 if (medicinesError) throw medicinesError;
                 medicines = medicinesData || [];
+                console.log(`Loaded ${medicines.length} medicines`);
 
                 // Load medicine history
                 const { data: historyData, error: historyError } = await supabase
@@ -1964,6 +1997,8 @@
                     .select('*')
                     .order('created_at', { ascending: false });
                 medicineChanges = changesData || [];
+                
+                console.log('All data loaded successfully');
 
             } catch (error) {
                 console.error('Load data error:', error);
@@ -1998,7 +2033,7 @@
                     if (error) throw error;
                     
                     const index = students.findIndex(s => s.student_id === studentData.id);
-                    if (index !== -1) {
+                    if (index !== -1 && data && data.length > 0) {
                         students[index] = data[0];
                     }
                 } else {
@@ -2032,7 +2067,9 @@
                     
                     if (error) throw error;
                     
-                    students.unshift(data[0]);
+                    if (data && data.length > 0) {
+                        students.unshift(data[0]);
+                    }
                 }
                 
                 return true;
@@ -2071,7 +2108,7 @@
                     if (error) throw error;
                     
                     const index = medicines.findIndex(m => m.id === medicineData.id);
-                    if (index !== -1) {
+                    if (index !== -1 && data && data.length > 0) {
                         medicines[index] = data[0];
                     }
                 } else {
@@ -2095,7 +2132,9 @@
                     
                     if (error) throw error;
                     
-                    medicines.unshift(data[0]);
+                    if (data && data.length > 0) {
+                        medicines.unshift(data[0]);
+                    }
                 }
                 
                 return true;
@@ -2123,7 +2162,9 @@
                     .select();
                 
                 if (error) throw error;
-                stockHistory.unshift(data[0]);
+                if (data && data.length > 0) {
+                    stockHistory.unshift(data[0]);
+                }
                 
                 return true;
             } catch (error) {
@@ -2147,7 +2188,9 @@
                     .select();
                 
                 if (error) throw error;
-                medicineChanges.unshift(data[0]);
+                if (data && data.length > 0) {
+                    medicineChanges.unshift(data[0]);
+                }
                 
                 return true;
             } catch (error) {
@@ -2174,7 +2217,9 @@
                     .select();
                 
                 if (error) throw error;
-                medicineHistory.unshift(data[0]);
+                if (data && data.length > 0) {
+                    medicineHistory.unshift(data[0]);
+                }
                 
                 return true;
             } catch (error) {
@@ -2200,7 +2245,9 @@
                     .select();
                 
                 if (error) throw error;
-                sideEffects.unshift(data[0]);
+                if (data && data.length > 0) {
+                    sideEffects.unshift(data[0]);
+                }
                 
                 return true;
             } catch (error) {
@@ -2223,7 +2270,7 @@
                 if (error) throw error;
                 
                 const index = medicines.findIndex(m => m.id === medicineId);
-                if (index !== -1) {
+                if (index !== -1 && data && data.length > 0) {
                     medicines[index] = data[0];
                 }
                 
@@ -2248,7 +2295,7 @@
                 if (error) throw error;
                 
                 const index = students.findIndex(s => s.student_id === studentId);
-                if (index !== -1) {
+                if (index !== -1 && data && data.length > 0) {
                     students[index] = data[0];
                 }
                 
@@ -2318,7 +2365,7 @@
         }
 
         // Tab Management
-        function showTab(tabName) {
+        function showTab(tabName, event) {
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
@@ -2327,7 +2374,9 @@
             });
 
             document.getElementById(tabName + '-tab').classList.add('active');
-            event.target.classList.add('active');
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
 
             if (tabName === 'dashboard') {
                 loadDashboard();
@@ -2827,6 +2876,8 @@
 
         function updateStudentSelect() {
             const select = document.getElementById('studentSelect');
+            if (!select) return;
+            
             select.innerHTML = '<option value="">เลือกนักเรียน</option>';
 
             students.forEach(student => {
@@ -2961,7 +3012,10 @@
                     
                     if (currentStudentId === studentId) {
                         currentStudentId = null;
-                        document.getElementById('studentSelect').value = '';
+                        const studentSelect = document.getElementById('studentSelect');
+                        if (studentSelect) {
+                            studentSelect.value = '';
+                        }
                         loadStudentMedicines();
                     }
                     
@@ -3036,7 +3090,12 @@
                 updateStudentSelect();
                 
                 // Close modal
-                document.querySelector('.modal').remove();
+                const modals = document.querySelectorAll('.modal');
+                modals.forEach(modal => {
+                    if (modal.querySelector('h2')?.textContent === 'เปลี่ยนสถานะนักเรียน') {
+                        modal.remove();
+                    }
+                });
                 
                 showAlert(`เปลี่ยนสถานะ ${student.first_name} ${student.last_name} เป็น "${statusText}" เรียบร้อยแล้ว`, 'success');
             } catch (error) {
@@ -3079,9 +3138,12 @@
             }
         }
 
-        // Medicine Management
+        // Medicine Management (ต่อจากที่ขาดไป)
         function loadStudentMedicines() {
-            const studentId = document.getElementById('studentSelect').value;
+            const studentSelect = document.getElementById('studentSelect');
+            if (!studentSelect) return;
+            
+            const studentId = studentSelect.value;
             const container = document.getElementById('medicinesContainer');
             const addBtn = document.getElementById('addMedicineBtn');
             const historyBtn = document.getElementById('historyBtn');
@@ -3311,6 +3373,8 @@
         
         function updateSideEffectMedicineSelect(studentMedicines) {
             const select = document.getElementById('sideEffectMedicine');
+            if (!select) return;
+            
             select.innerHTML = '<option value="">-- เลือกยา --</option>';
 
             studentMedicines.forEach(medicine => {
